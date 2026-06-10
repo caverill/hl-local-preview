@@ -1,5 +1,10 @@
 # Local config and generated preview files (not for production CMS upload)
 .env.local
+.hl-preview-settings.json
 preview/*
 __pycache__/
 *.pyc
+
+# Web UI
+desktop/node_modules/
+desktop/dist/

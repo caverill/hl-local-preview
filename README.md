@@ -58,6 +58,19 @@ python3 scripts/watch.py js        # JS only (alias: 2)
 
 Shorthand scripts still work: `watch_css.py` and `watch_js.py` (each delegates to `watch.py`).
 
+### Web UI (optional)
+
+A browser-based control panel starts the watcher, shows logs, and links to Stylus/Tampermonkey install URLs.
+
+**Requirements:** Python 3.10+, Node.js 18+
+
+```bash
+pip install -r requirements.txt
+python3 scripts/dev_desktop.py
+```
+
+Opens **http://localhost:1420** (React UI) backed by a local API on port `17890`. The CLI (`watch.py`) still works on its own if you prefer the terminal.
+
 ## ⚙️ How it works
 
 ```

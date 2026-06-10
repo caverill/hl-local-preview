@@ -1,6 +1,5 @@
 /**
  * CMS custom JavaScript — copy this file to production when ready.
- * Local preview: edit here, then run python3 scripts/watch_js.py
  */
 
 const MAIN_PREFIX = "[hl-js-local-preview:main]";

@@ -21,7 +21,7 @@ class PreviewHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def guess_type(self, path: str) -> str:
-        if path.endswith(".js"):
+        if path.endswith(".user.js") or path.endswith(".js"):
             return "application/javascript"
         if path.endswith(".user.css"):
             return "text/css"
