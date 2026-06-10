@@ -1,18 +1,28 @@
 # HL Local Preview
 
-Local CSS preview workflow for CMS theme development. Edit production CSS locally, sync it into a Stylus `user.css` file, and preview changes on a live site through the [Stylus](https://github.com/openstyles/stylus) browser extension.
+Local preview workflow for CMS theme development — CSS via [Stylus](https://github.com/openstyles/stylus) and JavaScript via [Tampermonkey](https://www.tampermonkey.net/).
 
-`watch_css.py` includes a **threaded built-in HTTP server** on port `5500` for Stylus live reload — no separate web server extension required.
+Both watchers include a **threaded built-in HTTP server** on port `5500` — no separate web server extension required.
 
 ## Quick start
 
 ```bash
 cp .env.local.example .env.local   # set your site URL
 pip install -r requirements.txt
-python3 scripts/watch_css.py       # sync, serve, open Stylus install URL
+python3 scripts/watch.py           # watch CSS + JS (default)
 ```
 
-Edit `main/styles.css`, save, and changes appear on your dev site via Stylus.
+Edit `main/styles.css` or `main/main.js`, save, and changes appear on your dev site via Stylus or Tampermonkey.
+
+### Preview modes
+
+```bash
+python3 scripts/watch.py css       # CSS only (alias: 1)
+python3 scripts/watch.py js        # JS only (alias: 2)
+python3 scripts/watch.py both      # CSS + JS (alias: 3, default)
+```
+
+Shorthand scripts still work: `watch_css.py` and `watch_js.py`.
 
 ## How it works
 
@@ -32,11 +42,16 @@ main/styles.css  →  watch_css.py  →  preview/cms-local-preview.user.css  →
 ```
 hl-local-preview/
 ├── main/
-│   └── styles.css                   # Production CSS — edit this
+│   ├── styles.css                   # Production CSS — edit this
+│   └── main.js                      # Production JS — edit this
 ├── preview/
-│   └── cms-local-preview.user.css   # Generated Stylus file (gitignored)
+│   ├── cms-local-preview.user.css   # Generated Stylus file
+│   └── js-local-preview.js          # Generated Tampermonkey preview file
 ├── scripts/
-│   └── watch_css.py                 # Watcher, sync, and preview server
+│   ├── watch.py                     # Unified watcher (css / js / both)
+│   ├── watch_css.py                 # CSS-only shorthand
+│   └── watch_js.py                  # JS-only shorthand
+├── tampermonkey-loader.user.js      # Install once in Tampermonkey
 ├── .env.local                       # Your local config (gitignored)
 ├── .env.local.example               # Config template
 ├── .gitignore
@@ -57,7 +72,16 @@ Edit `.env.local` with your site URL and matching-rule preferences (see [Configu
 ## Run the watcher
 
 ```bash
-# Default — watch for changes, start preview server, open Stylus install URL
+# Default — watch CSS + JS, start preview server, open browser tabs
+python3 scripts/watch.py
+
+# CSS only
+python3 scripts/watch.py css
+
+# JS only
+python3 scripts/watch.py js
+
+# Legacy shorthand (same as above)
 python3 scripts/watch_css.py
 
 # Sync once — start server and wait until Ctrl+C (no file watching)
@@ -180,4 +204,77 @@ Do not edit the preview file directly — changes will be overwritten on the nex
 
 ## Uploading to production
 
-When your local preview looks right, copy the contents of `main/styles.css` into the theme editor for production upload. The `preview/` file is for local Stylus preview only.
+When your local preview looks right, copy the contents of `main/styles.css` or `main/main.js` into the theme editor for production upload. The `preview/` files are for local preview only.
+
+---
+
+## JavaScript preview
+
+### Quick start
+
+```bash
+python3 scripts/watch_js.py
+```
+
+Edit `main/main.js`, save, refresh your dev site — Tampermonkey loads the latest preview script automatically.
+
+### How it works
+
+```
+main/main.js  →  watch_js.py  →  preview/js-local-preview.js  →  HTTP server  →  Tampermonkey loader  →  live site
+      ↑                                    ↑                          ↑
+ you edit here                  auto-generated; do not edit here   built-in on :5500
+```
+
+1. Install `tampermonkey-loader.user.js` in Tampermonkey once (stable loader; rarely changes).
+2. `scripts/watch_js.py` watches `main/main.js` and regenerates `preview/js-local-preview.js`.
+3. The loader fetches the preview script from `http://127.0.0.1:5500/preview/js-local-preview.js` with cache-busting on each page load.
+4. Refresh the browser to pick up changes — no need to reinstall the userscript.
+
+### Tampermonkey setup
+
+Install `tampermonkey-loader.user.js` in Tampermonkey. Update the `@match` line if your `SITE_URL` changes.
+
+Required grants for local development:
+
+| Grant / directive | Purpose |
+|-------------------|---------|
+| `@connect 127.0.0.1` | Fetch from the local preview server |
+| `@grant GM_xmlhttpRequest` | Request the preview script (bypasses page CORS) |
+| `@grant GM_addElement` | Inject the preview script into the page |
+
+Verify in DevTools console — filter for `hl-js-local-preview`:
+
+```
+[hl-js-local-preview:loader] Loaded preview script: http://127.0.0.1:5500/preview/js-local-preview.js
+[hl-js-local-preview:preview] Main script executed successfully
+```
+
+### Run the JS watcher
+
+```bash
+# Default — watch, start preview server, open SITE_URL from .env.local
+python3 scripts/watch_js.py
+
+# Sync once — start server and wait until Ctrl+C
+python3 scripts/watch_js.py --once
+
+# Watch without opening the dev site in a browser tab
+python3 scripts/watch_js.py --no-open
+
+# Sync only — generate preview file, no server
+python3 scripts/watch_js.py --once --no-serve
+```
+
+Uses the same CLI flags as the CSS watcher (`--env`, `--once`, `--no-serve`, `--no-open`).
+
+Both CSS and JS watchers share port `5500`. You do **not** need `watch_css.py` running for JS preview — `watch_js.py` starts the same built-in server on its own. If one watcher is already serving port `5500`, the other reuses it.
+
+### JS configuration
+
+| Variable | Description |
+|----------|-------------|
+| `JS_LOCAL_PREVIEW_NAME` | Output filename without `.js` (default: `js-local-preview`) |
+| `SOURCE_JS` | Path to production JS (default: `main/main.js`) |
+
+`SITE_URL` and `OUTPUT_DIR` are shared with the CSS workflow.

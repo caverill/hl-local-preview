@@ -1,2 +1,3 @@
 # Local config and generated Stylus preview (not for production CMS upload)
 .env.local
+preview/*
