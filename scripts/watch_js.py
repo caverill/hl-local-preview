@@ -11,9 +11,9 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import difflib
 from datetime import datetime
+import json
 import sys
 import threading
 import time
@@ -33,6 +33,7 @@ DEFAULT_ENV_PATH = ROOT / ".env.local"
 DEFAULT_SOURCE_JS = "main/main.js"
 DEFAULT_OUTPUT_DIR = "preview"
 DEFAULT_PREVIEW_NAME = "js-local-preview"
+DEFAULT_AUTO_REFRESH_INTERVAL_MS = 500
 
 
 @dataclass
@@ -41,6 +42,29 @@ class Config:
     preview_name: str
     source_js: Path
     output_path: Path
+    config_path: Path
+    auto_refresh: bool
+    auto_refresh_interval_ms: int
+
+
+def env_bool(env: dict[str, str], key: str, *, default: bool = False) -> bool:
+    raw = env.get(key, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
+def env_int(env: dict[str, str], key: str, *, default: int) -> int:
+    raw = env.get(key, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{key} must be an integer — got {raw!r}") from exc
+    if value < 500:
+        raise ValueError(f"{key} must be at least 500 (milliseconds)")
+    return value
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -69,12 +93,20 @@ def load_config(env_path: Path) -> Config:
     source_js = ROOT / env.get("SOURCE_JS", DEFAULT_SOURCE_JS).strip()
     output_dir = ROOT / env.get("OUTPUT_DIR", DEFAULT_OUTPUT_DIR).strip()
     output_path = output_dir / f"{preview_name}.js"
+    config_path = output_dir / f"{preview_name}.config.json"
 
     return Config(
         site_url=site_url,
         preview_name=preview_name,
         source_js=source_js,
         output_path=output_path,
+        config_path=config_path,
+        auto_refresh=env_bool(env, "JS_AUTO_REFRESH", default=True),
+        auto_refresh_interval_ms=env_int(
+            env,
+            "JS_AUTO_REFRESH_INTERVAL_MS",
+            default=DEFAULT_AUTO_REFRESH_INTERVAL_MS,
+        ),
     )
 
 
@@ -104,6 +136,19 @@ def build_preview_js(source: str, config: Config) -> str:
   }}
 }})();
 """
+
+
+def build_preview_config(config: Config) -> str:
+    payload = {
+        "autoRefresh": config.auto_refresh,
+        "autoRefreshIntervalMs": config.auto_refresh_interval_ms,
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def write_preview_config(config: Config) -> None:
+    config.output_path.parent.mkdir(parents=True, exist_ok=True)
+    config.config_path.write_text(build_preview_config(config), encoding="utf-8")
 
 
 def format_change_timestamp() -> str:
@@ -190,13 +235,21 @@ def sync_preview(config: Config, previous_source: str | None, *, log_change: boo
 
     source = config.source_js.read_text(encoding="utf-8")
     preview = build_preview_js(source, config)
+    preview_config = build_preview_config(config)
     config.output_path.parent.mkdir(parents=True, exist_ok=True)
 
     preview_unchanged = (
         config.output_path.exists()
         and config.output_path.read_text(encoding="utf-8") == preview
     )
+    config_unchanged = (
+        config.config_path.exists()
+        and config.config_path.read_text(encoding="utf-8") == preview_config
+    )
     source_unchanged = source_is_equal(previous_source, source)
+
+    if not config_unchanged:
+        write_preview_config(config)
 
     if preview_unchanged:
         if log_change and (source_unchanged or previous_source is not None):
@@ -306,67 +359,6 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
         stop_preview_server()
 
     return 0
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--env",
-        type=Path,
-        default=DEFAULT_ENV_PATH,
-        help="Path to .env.local (default: .env.local in repo root)",
-    )
-    parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Sync once and exit (no file watching)",
-    )
-    parser.add_argument(
-        "--no-serve",
-        action="store_true",
-        help="Do not start the built-in preview server",
-    )
-    parser.add_argument(
-        "--no-open",
-        action="store_true",
-        help="Do not open SITE_URL from .env.local in a browser tab",
-    )
-    args = parser.parse_args()
-
-    env_path = args.env.resolve()
-    try:
-        config = load_config(env_path)
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-
-    serve = not args.no_serve
-    open_browser = not args.no_open
-
-    if args.once:
-        ok = sync_preview(config, None) is not None
-        if ok and serve:
-            try:
-                start_preview_server()
-            except RuntimeError as exc:
-                print(f"error: {exc}", file=sys.stderr)
-                return 1
-        if ok:
-            print_ready_status(config, serve=serve)
-            if serve and open_browser:
-                open_dev_site_tab(config)
-            if serve:
-                print("Press Ctrl+C to stop.")
-                print()
-                try:
-                    while True:
-                        time.sleep(3600)
-                except KeyboardInterrupt:
-                    print()
-                stop_preview_server()
-        return 0 if ok else 1
-
-    return watch(config, env_path, serve=serve, open_browser=open_browser)
 
 
 if __name__ == "__main__":

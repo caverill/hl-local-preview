@@ -73,6 +73,13 @@ def print_ready_status(
         print(f"Site URL:    {js_config.site_url}")
         print(f"JS source:   {js_config.source_js.relative_to(watch_js.ROOT)}")
         print(f"JS output:   {js_config.output_path.relative_to(watch_js.ROOT)}")
+        if serve:
+            refresh = (
+                f"on ({js_config.auto_refresh_interval_ms}ms)"
+                if js_config.auto_refresh
+                else "off (JS_AUTO_REFRESH=false in .env.local)"
+            )
+            print(f"JS refresh:  auto {refresh}")
 
     if serve:
         print()

@@ -5,9 +5,11 @@
 ![CSS](https://img.shields.io/badge/CSS-Stylus-00a78e)
 ![JS](https://img.shields.io/badge/JS-Tampermonkey-00485b)
 ![Server](https://img.shields.io/badge/server-localhost%3A5500-orange)
+![Node.js](https://img.shields.io/badge/node.js-18+-339933?logo=nodedotjs&logoColor=white)
+![React](https://img.shields.io/badge/UI-React-61DAFB?logo=react&logoColor=black)
 [![GitHub](https://img.shields.io/badge/GitHub-hl--local--preview-181717?logo=github)](https://github.com/caverill/hl-local-preview)
 
-Local development toolkit for Higher Logic CMS theme customization. Edit CSS and JavaScript in your preferred editor, preview changes locally, and validate updates before publishing to the CMS. Powered CSS via [Stylus](https://github.com/openstyles/stylus) and JavaScript via [Tampermonkey](https://www.tampermonkey.net/).
+Local development toolkit for Higher Logic CMS theme customization. Edit CSS and JavaScript in your preferred editor, preview changes locally, and validate updates before publishing to the CMS. Use the **Web UI** control panel or the CLI watcher — CSS via [Stylus](https://github.com/openstyles/stylus), JavaScript via [Tampermonkey](https://www.tampermonkey.net/).
 
 ## Who this is for
 
@@ -18,6 +20,7 @@ You should already have:
 - A sandbox or dev site URL (set as `SITE_URL` in `.env.local`)
 - Access to the CMS theme editor where `main/styles.css` and `main/main.js` will eventually be pasted
 - Python 3.10+, Stylus and Tampermonkey
+- Node.js 18+ (optional — only needed for the Web UI)
 
 This is **not** a deployment tool, a CMS plugin, or something you install for site members. It is a personal local-dev setup on your machine.
 
@@ -43,7 +46,100 @@ This project provides a **local-development workflow with near-live preview capa
 
 Once development is complete, upload the final contents of `main/styles.css` and `main/main.js` to the CMS as usual.
 
-## 🚀 Quick start
+## Web UI
+
+A browser-based control panel for the same workflow as the CLI — start/stop the watcher, view live activity logs, configure your project, and open quick links to Stylus, Tampermonkey, your dev site, and your editor.
+
+### Requirements
+
+| | CLI only | Web UI |
+|---|----------|--------|
+| Python | 3.10+ | 3.10+ |
+| Node.js | — | 18+ |
+| Browser extensions | Stylus + Tampermonkey | Same |
+
+### Start the Web UI
+
+From the repo root:
+
+```bash
+pip install -r requirements.txt
+python3 scripts/dev_desktop.py
+```
+
+On first run, `dev_desktop.py` runs `npm install` in `desktop/` if needed, then starts:
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| React UI | http://localhost:1420 | Control panel |
+| Python API | http://127.0.0.1:17890 | Watcher, setup, logs (localhost only) |
+| Preview server | http://127.0.0.1:5500 | Serves generated CSS/JS to Stylus and Tampermonkey |
+
+Your browser opens the UI automatically. Press **Ctrl+C** in the terminal to stop everything.
+
+The CLI (`python3 scripts/watch.py`) still works on its own if you prefer the terminal.
+
+### First-time setup in the UI
+
+1. Click **Setup** in the top bar.
+2. Choose your **project folder** (Browse or paste a path). The UI detects Git repos and can jump to the repo root.
+3. Set **SITE_URL** to your sandbox or dev site.
+4. Pick a **CSS match mode** (url-prefix is the usual choice).
+5. If required files are missing, click **Create project files** — this scaffolds `main/styles.css`, `main/main.js`, `.env.local`, and related files.
+6. Click **Save**. Settings are written to `.env.local` in your project folder and remembered in `.hl-preview-settings.json` (repo root, gitignored).
+
+Install **Stylus** and **Tampermonkey** from the links in Setup or Quick Links (store URLs match Chrome or Firefox automatically). Update `@match` in `tampermonkey-loader.user.js` if your sandbox URL changes.
+
+### What the UI includes
+
+**Sidebar**
+
+- **Watcher** — start CSS only, JS only, or both; restart or stop the watcher.
+- **Status** — current watcher mode and whether the preview server port is live.
+- **Quick Links** — Stylus install, Tampermonkey loader install, dev site, GitHub remote (from your project’s Git config), and **Open in Cursor** or **Open in VS Code** (whichever is installed).
+- **Appearance** — light/dark theme and font size (+/−).
+
+**Main panel**
+
+- **Preview** — CSS and JS preview cards with live URLs, plus an **Activity** log (timestamps and line-change counts from the watcher).
+- **Diagnostics** — Python dependency checks and one-click `pip install`.
+
+**Top bar**
+
+- **Local Preview Repository** — this tool’s GitHub repo.
+- **Setup** — reopen project configuration at any time.
+
+### Web UI vs CLI
+
+| | Web UI | CLI (`watch.py`) |
+|---|--------|------------------|
+| Start watcher | Buttons in sidebar | Terminal command |
+| Logs | Activity panel with Clear | Terminal stdout |
+| Config | Setup modal → `.env.local` | Edit `.env.local` manually |
+| Open browser tabs | Quick Links | `--no-open` flag to skip auto-open |
+| Auto-open on start | No (use Quick Links) | Opens Stylus/dev site by default |
+
+### Web UI troubleshooting
+
+**UI or API won’t start**
+
+```bash
+# Free ports if something is stuck
+lsof -iTCP:1420 -sTCP:LISTEN -t | xargs kill
+lsof -iTCP:17890 -sTCP:LISTEN -t | xargs kill
+python3 scripts/dev_desktop.py
+```
+
+**Watcher shows errors in Activity**
+
+- Confirm the project folder has `main/styles.css`, `main/main.js`, and a valid `.env.local` with `SITE_URL`.
+- Use **Diagnostics** → **pip install** if Python dependencies are missing.
+
+**Quick Links greyed out**
+
+- Start the watcher and wait until **Port** shows **live** on the Status card.
+
+## 🚀 Quick start (CLI)
 
 | Edit | Preview via | After saving |
 |------|-------------|--------------|
@@ -57,6 +153,8 @@ python3 scripts/watch.py js        # JS only (alias: 2)
 ```
 
 Shorthand scripts still work: `watch_css.py` and `watch_js.py` (each delegates to `watch.py`).
+
+Prefer a visual workflow? See **[Web UI](#web-ui)** above.
 
 ## ⚙️ How it works
 
@@ -194,17 +292,25 @@ Expected console output when auto refresh is on:
 
 ```
 hl-local-preview/
+├── desktop/                         # Web UI (React + Vite)
+│   └── src/                         # UI components and hooks
+├── service/                         # Python API for the Web UI
+│   ├── api.py                       # HTTP routes (localhost only)
+│   ├── project.py                   # Project paths, .env.local, file scaffolding
+│   └── watcher.py                   # Watcher process control
 ├── main/
 │   ├── styles.css                   # Production CSS — edit this
 │   └── main.js                      # Production JS — edit this
 ├── preview/                         # Generated files (gitignored)
 ├── scripts/
+│   ├── dev_desktop.py               # Start Web UI + API
 │   ├── watch.py                     # Unified watcher (css / js / both)
 │   ├── watch_css.py                 # CSS-only shorthand
 │   ├── watch_js.py                  # JS-only shorthand
 │   └── preview_server.py            # Shared HTTP server on port 5500
 ├── tampermonkey-loader.user.js      # Install once in Tampermonkey
 ├── .env.local                       # Your local config (gitignored)
+├── .hl-preview-settings.json        # Web UI project path (gitignored)
 └── .env.local.example               # Config template
 ```
 
@@ -391,8 +497,9 @@ CSS preview via Stylus injects styles the same way user styles do; keep Stylus r
 
 ## Roadmap
 
-### In Progress
-- [ ] Turn this into a lightweight Replit app with a simple UI for configuring and running the local preview workflow.
+### Completed
+
+- [x] Web UI control panel for configuring and running the local preview workflow
 
 ### Planned
 
