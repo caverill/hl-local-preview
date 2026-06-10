@@ -1,3 +1,5 @@
-# Local config and generated Stylus preview (not for production CMS upload)
+# Local config and generated preview files (not for production CMS upload)
 .env.local
 preview/*
+__pycache__/
+*.pyc
