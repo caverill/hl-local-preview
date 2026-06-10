@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name           hl-js-local-preview-loader
 // @namespace      higherlogic-local-dev
-// @version        1.2.1
+// @version        1.3.0
 // @description    Stable Tampermonkey loader for local JS preview development. Installs once; loads the generated preview script from your local watcher.
-// @author         HL Local Preview
+// @author         Cailee Averill
+// @updateURL      http://127.0.0.1:17890/api/tampermonkey-loader.user.js
 //
-// Match the same pages you target in .env.local (SITE_URL). Add or adjust @match lines as needed.
-// @match          https://econversetest.connectedcommunity.org/caileesandbox/*
+// AUTO-MATCH-START - synced from SITE_URL in .env.local
+// @include       /^https?://designservices\.connectedcommunity\.org/summittheme/home.*/
+// AUTO-MATCH-END
 //
 // Required for fetching js-local-preview.js from the local preview server (:5500).
 // @connect        127.0.0.1
@@ -38,6 +40,7 @@
   const configUrl = `http://${PREVIEW_HOST}:${PREVIEW_PORT}/${PREVIEW_CONFIG}`;
 
   let lastPreviewContent = null;
+  let lastRevision = null;
   let autoRefreshTimer = null;
   let pollErrors = 0;
   const MAX_POLL_ERRORS = 3;
@@ -114,31 +117,58 @@
     pollErrors = 0;
     console.log(`${LOG_PREFIX} Auto refresh enabled (${intervalMs}ms)`);
 
+    if (settings.revision !== undefined && settings.revision !== null) {
+      lastRevision = settings.revision;
+    }
+
     autoRefreshTimer = setInterval(() => {
-      fetchText(previewUrl, (error, source) => {
-        if (error) {
-          pollErrors += 1;
-          if (pollErrors >= MAX_POLL_ERRORS) {
-            stopAutoRefresh("preview server unreachable");
+      fetchText(configUrl, (configError, rawConfig) => {
+        if (!configError) {
+          try {
+            const polled = JSON.parse(rawConfig);
+            const revision = polled.revision;
+            if (
+              revision !== undefined &&
+              lastRevision !== null &&
+              revision !== lastRevision
+            ) {
+              console.log(`${LOG_PREFIX} Preview changed — reloading page`);
+              pageWindow().location.reload();
+              return;
+            }
+            if (revision !== undefined) {
+              lastRevision = revision;
+            }
+          } catch (parseError) {
+            console.warn(`${LOG_PREFIX} Invalid preview config while polling`, parseError);
           }
-          return;
         }
 
-        pollErrors = 0;
+        fetchText(previewUrl, (error, source) => {
+          if (error) {
+            pollErrors += 1;
+            if (pollErrors >= MAX_POLL_ERRORS) {
+              stopAutoRefresh("preview server unreachable");
+            }
+            return;
+          }
 
-        if (lastPreviewContent === null || source === lastPreviewContent) {
-          return;
-        }
+          pollErrors = 0;
 
-        console.log(`${LOG_PREFIX} Preview changed — reloading page`);
-        pageWindow().location.reload();
+          if (lastPreviewContent === null || source === lastPreviewContent) {
+            return;
+          }
+
+          console.log(`${LOG_PREFIX} Preview changed — reloading page`);
+          pageWindow().location.reload();
+        });
       });
     }, intervalMs);
   }
 
   function loadConfigAndStart() {
     const fallbackSettings = {
-      autoRefresh: false,
+      autoRefresh: true,
       autoRefreshIntervalMs: 500,
     };
 

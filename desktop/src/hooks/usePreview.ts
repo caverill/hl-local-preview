@@ -51,8 +51,11 @@ export function usePreview(pollMs = 1200) {
   }, [refresh, refreshEditors, pollMs]);
 
   const clearLogs = useCallback(() => {
-    setLogs([]);
-    logSince.current = 0;
+    setLogs((prev) => {
+      const lastId = prev.at(-1)?.id ?? logSince.current;
+      logSince.current = lastId;
+      return [];
+    });
   }, []);
 
   const startWatcher = useCallback(

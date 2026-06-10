@@ -79,10 +79,13 @@ export const api = {
   setConfig: (site_url: string) =>
     request("/api/config", { method: "PUT", body: JSON.stringify({ site_url }) }),
   createFiles: (path?: string) =>
-    request<ProjectInfo & { created: string[] }>("/api/project/files", {
-      method: "POST",
-      body: JSON.stringify({ path: path ?? "" }),
-    }),
+    request<ProjectInfo & { created: string[]; preview_built?: boolean; preview_error?: string }>(
+      "/api/project/files",
+      {
+        method: "POST",
+        body: JSON.stringify({ path: path ?? "" }),
+      },
+    ),
   startWatcher: (mode: string) =>
     request("/api/watcher/start", { method: "POST", body: JSON.stringify({ mode }) }),
   stopWatcher: () => request("/api/watcher/stop", { method: "POST", body: "{}" }),

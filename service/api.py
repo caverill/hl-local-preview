@@ -9,10 +9,11 @@ import sys
 import webbrowser
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 from service import project
+from service.tampermonkey_loader import read_loader_script
 from service.folder_picker import pick_folder
 from service.open_editor import EDITORS, list_available_editors, open_in_editor
 from service.open_path import open_path as open_folder
@@ -25,6 +26,20 @@ CORS(app)
 @app.get("/api/health")
 def health():
     return jsonify({"ok": True})
+
+
+@app.get("/api/tampermonkey-loader.user.js")
+def tampermonkey_loader():
+    project_dir = project.get_project_dir()
+    try:
+        source = read_loader_script(project_dir)
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 404
+    return Response(
+        source,
+        mimetype="application/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/status")
@@ -58,14 +73,20 @@ def put_setup():
 
     project.set_project_dir(p)
     d = project.get_project_dir()
-    project.apply_setup_env(
+    _, preview_ok, preview_error = project.apply_setup_env(
         d,
         site_url=str(data.get("site_url", "")).strip(),
         match_mode=str(data.get("match_mode", "url-prefix")).strip(),
         match_regexp_pattern=str(data.get("match_regexp_pattern", "")).strip(),
     )
 
-    return jsonify(project.project_info(d))
+    response = {
+        "preview_built": preview_ok,
+        **project.project_info(d),
+    }
+    if not preview_ok:
+        response["preview_error"] = preview_error
+    return jsonify(response)
 
 
 @app.put("/api/project")
@@ -86,11 +107,15 @@ def put_config():
     data = request.get_json(force=True, silent=True) or {}
     d = project.get_project_dir()
     if "site_url" in data:
-        project.apply_setup_env(
+        _, preview_ok, preview_error = project.apply_setup_env(
             d,
             site_url=str(data["site_url"]).strip(),
             match_mode=project.match_mode_from_env(project.load_env(d / ".env.local")),
         )
+        response: dict = {"ok": True, "urls": project.preview_urls(d), "preview_built": preview_ok}
+        if not preview_ok:
+            response["preview_error"] = preview_error
+        return jsonify(response)
     return jsonify({"ok": True, "urls": project.preview_urls(d)})
 
 
@@ -106,11 +131,16 @@ def create_files():
     d = project.get_project_dir()
     created = project.create_missing_files(d)
     project.ensure_env_file(d)
-    return jsonify({
+    preview_ok, preview_error = project.finalize_project_setup(d)
+    response = {
         "created": created,
         "missing": project.missing_files(d),
+        "preview_built": preview_ok,
         **project.project_info(d),
-    })
+    }
+    if not preview_ok:
+        response["preview_error"] = preview_error
+    return jsonify(response)
 
 
 @app.post("/api/watcher/start")

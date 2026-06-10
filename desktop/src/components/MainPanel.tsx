@@ -16,7 +16,7 @@ export default function MainPanel() {
   const { project, logs, clearLogs } = usePreviewContext();
 
   return (
-    <section className="glass-shell flex min-h-0 flex-1 flex-col p-5">
+    <section className="glass-shell flex min-h-0 flex-1 flex-col p-4">
       <div role="tablist" className="theme-tab-bar flex gap-1 rounded-full p-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
@@ -35,7 +35,7 @@ export default function MainPanel() {
         ))}
       </div>
 
-      <div className="mt-5 flex min-h-0 flex-1 flex-col" role="tabpanel">
+      <div className="mt-4 flex min-h-0 flex-1 flex-col" role="tabpanel">
         {tab === "preview" ? (
           <PreviewTab
             cssUrl={project?.urls.stylus}

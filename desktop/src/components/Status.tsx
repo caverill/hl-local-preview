@@ -1,4 +1,4 @@
-import { Activity, Plug, type LucideIcon } from "lucide-react";
+import { Activity, Plug, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { usePreviewContext } from "../hooks/PreviewContext";
 import SidebarCard from "./SidebarCard";
 
@@ -30,14 +30,20 @@ export default function Status() {
   const { running, status } = usePreviewContext();
 
   const port = status?.preview_port ?? 5500;
-  const portLive = status?.preview_port_open ?? false;
+  const portOpen = status?.preview_port_open ?? false;
+  const portHealthy = running && portOpen;
   const mode = status?.watcher_mode;
+
+  const portIdle = portOpen && !running;
+  const portLabel = portHealthy ? "live" : portIdle ? "idle" : "closed";
+  const portDotClass = portHealthy ? "accent-dot" : portIdle ? "status-dot-idle" : "bg-red-500";
+  const portValueClass = portHealthy ? "accent-text" : portIdle ? "status-text-idle" : "text-red-400";
 
   return (
     <SidebarCard title="Status" icon={Activity}>
       <StatusRow
         label="Mode"
-        icon={Activity}
+        icon={SlidersHorizontal}
         value={running && mode ? mode : "Stopped"}
         dotClass={running ? "accent-dot" : "bg-red-500"}
         flash={!running}
@@ -46,10 +52,10 @@ export default function Status() {
       <StatusRow
         label="Port"
         icon={Plug}
-        value={`${port} ${portLive ? "live" : "closed"}`}
-        dotClass={portLive ? "accent-dot" : "bg-red-500"}
-        flash={!portLive}
-        valueClass={portLive ? "accent-text" : "theme-text-soft"}
+        value={`${port} ${portLabel}`}
+        dotClass={portDotClass}
+        flash={!portHealthy}
+        valueClass={portValueClass}
       />
     </SidebarCard>
   );

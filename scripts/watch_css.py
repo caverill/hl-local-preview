@@ -24,7 +24,7 @@ from urllib.parse import urlparse
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from preview_server import PREVIEW_PORT, start_preview_server, stop_preview_server
+from preview_server import PREVIEW_PORT, set_serve_root, start_preview_server, stop_preview_server
 
 ROOT = SCRIPT_DIR.parent
 DEFAULT_ENV_PATH = ROOT / ".env.local"
@@ -125,6 +125,7 @@ def build_user_css(styles: str, config: Config) -> str:
 @name           {config.preview_name}
 @namespace      higherlogic-local-dev
 @version        1.0.0
+@author         Cailee Averill
 @description    Local CMS preview CSS generated from production styles
 ==/UserStyle== */
 """
@@ -317,6 +318,7 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
 
     if serve:
         try:
+            set_serve_root(ROOT)
             start_preview_server()
         except RuntimeError as exc:
             print(f"error: {exc}", file=sys.stderr)

@@ -1,5 +1,6 @@
 import { Minus, Plus } from "lucide-react";
 import { useTheme } from "../hooks/ThemeContext";
+import { btnIcon } from "../lib/buttons";
 
 export default function FontSizeControl() {
   const {
@@ -11,14 +12,14 @@ export default function FontSizeControl() {
   } = useTheme();
 
   return (
-    <div className="flex flex-col gap-1.5 mt-2">
+    <div className="flex flex-col gap-2">
       <span className="text-[11px] font-medium uppercase tracking-[0.12em] theme-text-muted">
         Font size
       </span>
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="btn btn-sm btn-interactive theme-sidebar-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-0 p-0 btn-interactive-lime"
+          className={btnIcon}
           onClick={decreaseFontSize}
           disabled={!canDecreaseFontSize}
           aria-label="Decrease font size"
@@ -31,7 +32,7 @@ export default function FontSizeControl() {
         </span>
         <button
           type="button"
-          className="btn btn-sm btn-interactive theme-sidebar-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-0 p-0 btn-interactive-lime"
+          className={btnIcon}
           onClick={increaseFontSize}
           disabled={!canIncreaseFontSize}
           aria-label="Increase font size"

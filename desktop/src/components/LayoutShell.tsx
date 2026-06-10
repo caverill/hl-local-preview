@@ -16,7 +16,7 @@ function LayoutShellInner() {
   const [setupOpen, setSetupOpen] = useState(false);
 
   return (
-    <div className="theme-page relative min-h-screen overflow-hidden p-8">
+    <div className="theme-page relative min-h-screen overflow-hidden p-6">
       <div
         aria-hidden
         className="theme-orb-lime pointer-events-none absolute -left-24 -top-24 h-[28rem] w-[28rem] rounded-full bg-lime-400 blur-3xl"
@@ -30,7 +30,7 @@ function LayoutShellInner() {
         className="theme-orb-orange pointer-events-none absolute left-[45%] top-[35%] h-80 w-80 -translate-x-1/2 rounded-full bg-orange-400 blur-3xl"
       />
 
-      <div className="theme-shell relative flex min-h-[calc(100vh-3rem)] flex-col gap-6 rounded-3xl p-8 backdrop-blur-xl">
+      <div className="theme-shell relative flex h-[calc(100vh-3rem)] max-h-[calc(100vh-3rem)] flex-col gap-4 overflow-hidden rounded-3xl p-6 backdrop-blur-xl">
         <TopNav projectPath={project?.path} onSetupClick={() => setSetupOpen(true)} />
 
         {error && (
@@ -47,15 +47,18 @@ function LayoutShellInner() {
           onCreateFiles={createProjectFiles}
         />
 
-        <div className="flex min-h-0 flex-1 gap-6">
-          <aside className="flex min-h-0 w-64 shrink-0 flex-col gap-4">
+        <div className="flex min-h-0 flex-1 gap-4">
+          <aside className="relative flex min-h-0 w-64 shrink-0 flex-col gap-4 pb-14">
             <Watcher />
             <Status />
             <QuickLinks />
-            <SidebarCard title="Appearance" icon={SunMoon} className="mt-auto">
+            <SidebarCard title="Appearance" icon={SunMoon}>
               <ThemeToggle variant="sidebar" />
               <FontSizeControl />
             </SidebarCard>
+            <p className="theme-text-muted absolute bottom-0 left-0 right-0 px-1 text-lg leading-tight">
+              Created by Cailee Averill
+            </p>
           </aside>
 
           <MainPanel />

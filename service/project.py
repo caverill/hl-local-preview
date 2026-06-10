@@ -4,6 +4,7 @@ import json
 import shutil
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -25,11 +26,15 @@ ALL_PROJECT_FILES = [
     "scripts/watch.py",
     "scripts/watch_css.py",
     "scripts/watch_js.py",
+    "scripts/tampermonkey_loader.py",
     "scripts/preview_server.py",
     "tampermonkey-loader.user.js",
     ".env.local.example",
     "requirements.txt",
+    ".gitignore",
 ]
+
+PROJECT_GITIGNORE_TEMPLATE = REPO_ROOT / "templates" / "project.gitignore"
 
 TEMPLATE_ENV = """\
 SITE_URL=https://example.com/your-sandbox/
@@ -49,8 +54,16 @@ MATCH_REGEXP=false
 INLINE_TEMPLATES = {
     "main/styles.css": "/* CMS custom CSS — edit and upload when ready */\n",
     "main/main.js": (
+        "/**\n"
+        " * CMS custom JavaScript — copy this file to production when ready.\n"
+        " *\n"
+        " * DevTools tip: filter the console with MAIN_PREFIX to see only this script's logs.\n"
+        " */\n"
+        "\n"
+        "const MAIN_PREFIX = \"[hl-js-local-preview:main]\";\n"
+        "\n"
         "$(function () {\n"
-        "  console.log('[hl-js-local-preview:main] ready');\n"
+        "  console.log(MAIN_PREFIX + \" ready\");\n"
         "});\n"
     ),
     "requirements.txt": "watchdog>=3.0.0\nflask>=3.0.0\nflask-cors>=4.0.0\n",
@@ -169,7 +182,8 @@ def apply_setup_env(
     updates = {"SITE_URL": site_url.strip()}
     updates.update(match_env_updates(match_mode, match_regexp_pattern))
     write_env(env_path, updates)
-    return env_path
+    preview_ok, preview_error = finalize_project_setup(project_dir)
+    return env_path, preview_ok, preview_error
 
 
 def find_git_root(path: Path) -> Path | None:
@@ -277,15 +291,74 @@ def create_missing_files(project_dir: Path) -> list[str]:
         if dest.is_file():
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        src = REPO_ROOT / rel
-        if src.is_file():
-            shutil.copy2(src, dest)
+        if rel == ".gitignore" and PROJECT_GITIGNORE_TEMPLATE.is_file():
+            shutil.copy2(PROJECT_GITIGNORE_TEMPLATE, dest)
+        elif (REPO_ROOT / rel).is_file():
+            shutil.copy2(REPO_ROOT / rel, dest)
         elif rel in INLINE_TEMPLATES:
             dest.write_text(INLINE_TEMPLATES[rel], encoding="utf-8")
         else:
             dest.touch()
         created.append(rel)
     return created
+
+
+def sync_tampermonkey_loader(project_dir: Path) -> None:
+    scripts_dir = str(REPO_ROOT / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from tampermonkey_loader import sync_tampermonkey_loader as sync_loader
+
+    sync_loader(project_dir)
+
+
+def build_initial_previews(project_dir: Path) -> tuple[bool, str]:
+    """Build preview/ CSS and JS once from source files."""
+    env_path = project_dir / ".env.local"
+    watch_script = project_dir / "scripts" / "watch.py"
+    if not env_path.is_file():
+        return False, "missing .env.local"
+    if not watch_script.is_file():
+        return False, "missing scripts/watch.py"
+    if missing_files(project_dir):
+        return False, "missing required project files"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-u",
+            str(watch_script),
+            "both",
+            "--once",
+            "--no-open",
+            "--no-serve",
+            "--env",
+            str(env_path),
+        ],
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        return False, detail or "preview build failed"
+
+    return True, ""
+
+
+def finalize_project_setup(project_dir: Path) -> tuple[bool, str]:
+    """Sync Tampermonkey rules, build preview files, and start preview server."""
+    sync_tampermonkey_loader(project_dir)
+    preview_ok, preview_error = build_initial_previews(project_dir)
+    try:
+        from service.local_preview import ensure_preview_server
+
+        ensure_preview_server(project_dir)
+    except OSError:
+        pass
+    return preview_ok, preview_error
 
 
 def port_open(port: int) -> bool:
@@ -320,7 +393,7 @@ def preview_urls(project_dir: Path) -> dict[str, str]:
         "js_preview": f"http://127.0.0.1:{PREVIEW_PORT}/{out}/{js}.js",
         "site": env.get("SITE_URL", ""),
         "tampermonkey_loader": (
-            f"http://127.0.0.1:{PREVIEW_PORT}/tampermonkey-loader.user.js"
+            f"http://127.0.0.1:{SERVICE_PORT}/api/tampermonkey-loader.user.js"
             if tm.is_file()
             else ""
         ),
@@ -345,8 +418,12 @@ def diagnostics(project_dir: Path) -> list[dict[str, str]]:
     if port_open(PREVIEW_PORT):
         checks.append(row("CSS preview URL", url_ok(urls["stylus"]), urls["stylus"]))
         checks.append(row("JS preview URL", url_ok(urls["js_preview"]), urls["js_preview"]))
-        if urls["tampermonkey_loader"]:
-            checks.append(
-                row("Tampermonkey loader URL", url_ok(urls["tampermonkey_loader"]), urls["tampermonkey_loader"])
+    if urls["tampermonkey_loader"]:
+        checks.append(
+            row(
+                "Tampermonkey loader URL",
+                url_ok(urls["tampermonkey_loader"]),
+                urls["tampermonkey_loader"],
             )
+        )
     return checks

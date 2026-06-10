@@ -8,6 +8,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  btnActiveBlock,
+  btnDangerBlock,
+  btnDisabled,
+  btnNeutralBlock,
+} from "../lib/buttons";
 import { usePreviewContext } from "../hooks/PreviewContext";
 import SidebarCard from "./SidebarCard";
 
@@ -28,7 +34,7 @@ function isActive(mode: WatcherMode, activeMode: WatcherMode | null, running: bo
 }
 
 function inactiveClass(inactive: boolean) {
-  return inactive ? "pointer-events-none opacity-40" : "";
+  return inactive ? btnDisabled : "";
 }
 
 type WatcherButtonProps = {
@@ -43,7 +49,7 @@ function WatcherButton({ label, icon: Icon, className, inactive = false, onClick
   return (
     <button
       type="button"
-      className={`btn btn-sm btn-interactive relative flex h-auto min-h-0 items-center justify-center rounded-xl border-0 py-2.5 text-sm font-medium ${className} ${inactiveClass(inactive)}`}
+      className={`${className} ${inactiveClass(inactive)}`}
       aria-disabled={inactive}
       onClick={inactive ? undefined : onClick}
     >
@@ -95,7 +101,7 @@ function ModeButton({
     return (
       <div
         aria-pressed="true"
-        className="mode-active accent-btn-solid relative flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold"
+        className={`${btnActiveBlock} mode-active`}
       >
         {content}
       </div>
@@ -105,7 +111,7 @@ function ModeButton({
   return (
     <button
       type="button"
-      className={`btn-interactive theme-sidebar-btn relative flex h-auto min-h-0 w-full items-center justify-center rounded-xl border-0 px-4 py-2.5 text-sm font-medium btn-interactive-lime ${inactiveClass(inactive)}`}
+      className={`${btnNeutralBlock} ${inactiveClass(inactive)}`}
       aria-disabled={inactive}
       onClick={inactive ? undefined : onClick}
     >
@@ -182,14 +188,14 @@ export default function Watcher() {
       <WatcherButton
         label="Restart"
         icon={RotateCw}
-        className="btn-interactive theme-sidebar-btn btn-interactive-lime"
+        className={btnNeutralBlock}
         inactive={controlDisabled}
         onClick={() => run(restartWatcher)}
       />
       <WatcherButton
         label="Stop"
         icon={Square}
-        className="bg-red-500/90 text-white hover:bg-red-500 btn-interactive-danger"
+        className={btnDangerBlock}
         inactive={controlDisabled}
         onClick={() => run(stopWatcher)}
       />

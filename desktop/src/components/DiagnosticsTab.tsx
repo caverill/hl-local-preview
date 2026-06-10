@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Package, Stethoscope, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { btnGhostSm } from "../lib/buttons";
 
 type Check = { label: string; status: string; detail: string };
 
@@ -34,7 +35,7 @@ export default function DiagnosticsTab() {
         </span>
         <button
           type="button"
-          className="btn btn-ghost btn-xs btn-interactive theme-btn-ghost accent-hover btn-interactive-lime flex shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium tracking-wide"
+          className={`${btnGhostSm} shrink-0 text-[11px] tracking-wide`}
           disabled={installing}
           onClick={handleInstall}
         >
