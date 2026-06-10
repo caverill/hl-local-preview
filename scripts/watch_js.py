@@ -89,7 +89,7 @@ def build_preview_js(source: str, config: Config) -> str:
 // Source: {source_relative}
 //
 // {source_relative} is inlined below as-is for local preview.
-// Copy {source_relative} to the CMS unchanged — see js-example.js for format.
+// Copy {source_relative} to the CMS unchanged when ready for production.
 
 (function () {{
   "use strict";
