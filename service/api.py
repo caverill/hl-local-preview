@@ -9,10 +9,11 @@ import sys
 import webbrowser
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 from service import project
+from service.tampermonkey_loader import read_loader_script
 from service.folder_picker import pick_folder
 from service.open_editor import EDITORS, list_available_editors, open_in_editor
 from service.open_path import open_path as open_folder
@@ -27,9 +28,23 @@ def health():
     return jsonify({"ok": True})
 
 
+@app.get("/api/tampermonkey-loader.user.js")
+def tampermonkey_loader():
+    project_dir = project.get_project_dir()
+    try:
+        source = read_loader_script(project_dir)
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 404
+    return Response(
+        source,
+        mimetype="application/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/api/status")
 def status():
-    d = project.get_project_dir()
+    d = project.active_project_dir()
     return jsonify({
         "watcher_running": watcher.running,
         "watcher_mode": watcher.mode if watcher.running else None,
@@ -37,13 +52,34 @@ def status():
         "preview_port_open": project.port_open(project.PREVIEW_PORT),
         "project_dir": str(d),
         "missing_files": project.missing_files(d),
+        **project.api_build_times(),
     })
 
 
 @app.get("/api/project")
 def get_project():
-    d = project.get_project_dir()
-    return jsonify(project.project_info(d))
+    d = project.active_project_dir()
+    info = project.project_info(d)
+    info.update(project.api_build_times())
+    return jsonify(info)
+
+
+@app.get("/api/preferences")
+def get_preferences():
+    return jsonify(project.get_preferences())
+
+
+@app.put("/api/preferences")
+def put_preferences():
+    data = request.get_json(force=True, silent=True) or {}
+    allowed = {}
+    if "auto_start_watcher" in data:
+        allowed["auto_start_watcher"] = data["auto_start_watcher"]
+    if "desktop_notifications" in data:
+        allowed["desktop_notifications"] = data["desktop_notifications"]
+    if "last_watcher_mode" in data:
+        allowed["last_watcher_mode"] = data["last_watcher_mode"]
+    return jsonify(project.update_preferences(**allowed))
 
 
 @app.put("/api/setup")
@@ -56,16 +92,26 @@ def put_setup():
     if not p.is_dir():
         return jsonify({"error": "not a directory"}), 400
 
+    site_url = str(data.get("site_url", "")).strip()
+    if not site_url:
+        return jsonify({"error": "SITE_URL is required"}), 400
+
     project.set_project_dir(p)
     d = project.get_project_dir()
-    project.apply_setup_env(
+    _, preview_ok, preview_error = project.apply_setup_env(
         d,
-        site_url=str(data.get("site_url", "")).strip(),
+        site_url=site_url,
         match_mode=str(data.get("match_mode", "url-prefix")).strip(),
         match_regexp_pattern=str(data.get("match_regexp_pattern", "")).strip(),
     )
 
-    return jsonify(project.project_info(d))
+    response = {
+        "preview_built": preview_ok,
+        **project.project_info(d),
+    }
+    if not preview_ok:
+        response["preview_error"] = preview_error
+    return jsonify(response)
 
 
 @app.put("/api/project")
@@ -86,12 +132,35 @@ def put_config():
     data = request.get_json(force=True, silent=True) or {}
     d = project.get_project_dir()
     if "site_url" in data:
-        project.apply_setup_env(
+        _, preview_ok, preview_error = project.apply_setup_env(
             d,
             site_url=str(data["site_url"]).strip(),
             match_mode=project.match_mode_from_env(project.load_env(d / ".env.local")),
         )
+        response: dict = {"ok": True, "urls": project.preview_urls(d), "preview_built": preview_ok}
+        if not preview_ok:
+            response["preview_error"] = preview_error
+        return jsonify(response)
     return jsonify({"ok": True, "urls": project.preview_urls(d)})
+
+
+@app.post("/api/project/sync")
+def sync_project_files():
+    if watcher.running:
+        return jsonify({"error": "stop the watcher before updating project files"}), 409
+    data = request.get_json(force=True, silent=True) or {}
+    path = (data.get("path") or "").strip()
+    if path:
+        p = Path(path).expanduser().resolve()
+        if not p.is_dir():
+            return jsonify({"error": "not a directory"}), 400
+        project.set_project_dir(p)
+    d = project.get_project_dir()
+    files = data.get("files")
+    if files is not None and not isinstance(files, list):
+        return jsonify({"error": "files must be a list"}), 400
+    updated = project.sync_project_files(d, files if isinstance(files, list) else None)
+    return jsonify({"updated": updated, **project.project_info(d)})
 
 
 @app.post("/api/project/files")
@@ -106,11 +175,16 @@ def create_files():
     d = project.get_project_dir()
     created = project.create_missing_files(d)
     project.ensure_env_file(d)
-    return jsonify({
+    preview_ok, preview_error = project.finalize_project_setup(d)
+    response = {
         "created": created,
         "missing": project.missing_files(d),
+        "preview_built": preview_ok,
         **project.project_info(d),
-    })
+    }
+    if not preview_ok:
+        response["preview_error"] = preview_error
+    return jsonify(response)
 
 
 @app.post("/api/watcher/start")
@@ -125,6 +199,7 @@ def start_watcher():
         watcher.start(d, mode)
     except FileNotFoundError as exc:
         return jsonify({"error": str(exc)}), 400
+    project.update_preferences(last_watcher_mode=mode)
     return jsonify({"running": True, "mode": watcher.mode})
 
 
@@ -140,10 +215,34 @@ def restart_watcher():
     return jsonify({"running": watcher.running, "mode": watcher.mode})
 
 
+@app.post("/api/preview/rebuild")
+def rebuild_preview():
+    data = request.get_json(force=True, silent=True) or {}
+    mode = str(data.get("mode", "both")).lower()
+    d = project.get_project_dir()
+    missing = project.missing_files(d)
+    if missing:
+        return jsonify({"error": "missing required files", "missing": missing}), 400
+    if watcher.running:
+        return jsonify({"error": "stop the watcher before rebuilding"}), 409
+    preview_ok, preview_error = project.rebuild_preview_once(d, mode)
+    response = {"preview_built": preview_ok, **project.project_info(d)}
+    if not preview_ok:
+        response["preview_error"] = preview_error
+        return jsonify(response), 500
+    return jsonify(response)
+
+
 @app.get("/api/logs")
 def logs():
     since = int(request.args.get("since", 0))
-    return jsonify({"entries": watcher.logs_since(since)})
+    return jsonify({"entries": watcher.logs_since(since), "cursor": watcher.log_cursor()})
+
+
+@app.post("/api/logs/clear")
+def clear_logs():
+    since = watcher.clear_logs()
+    return jsonify({"ok": True, "since": since})
 
 
 @app.get("/api/diagnostics")

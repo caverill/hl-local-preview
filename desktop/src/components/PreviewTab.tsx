@@ -1,34 +1,40 @@
-import { Braces, Palette, ScrollText, Trash2, type LucideIcon } from "lucide-react";
+import { ArrowUp, Braces, Palette, ScrollText, Trash2, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useLogFilters } from "../hooks/LogFilterContext";
+import type { LogEntry } from "../lib/api";
+import { btnIcon, btnNeutralSm } from "../lib/buttons";
+import { filterLogs } from "../lib/logFilters";
+import LogFilterControls from "./LogFilterControls";
 
 function logColor(level: string) {
   if (level === "ok") return "log-level-ok";
   if (level === "err") return "log-level-err";
   if (level === "warn") return "log-level-warn";
   if (level === "cmd") return "log-level-cmd";
-  return "theme-text-soft";
+  return "log-level-info";
 }
 
 type PreviewCardProps = {
   title: string;
   file: string;
   url?: string;
-  accent: "purple" | "amber";
+  tone: "purple" | "yellow";
   icon: LucideIcon;
 };
 
-function PreviewCard({ title, file, url, accent, icon: Icon }: PreviewCardProps) {
-  const accentClass = accent === "purple" ? "preview-card-purple" : "preview-card-amber";
-  const iconClass = accent === "purple" ? "text-purple-400/70" : "text-amber-400/70";
+function PreviewCard({ title, file, url, tone, icon: Icon }: PreviewCardProps) {
+  const cardClass = tone === "purple" ? "preview-card-purple" : "preview-card-yellow";
+  const iconClass = tone === "purple" ? "icon-purple" : "icon-yellow";
 
   return (
-    <div className={`preview-card ${accentClass}`}>
+    <div className={`preview-card flex flex-col gap-2 ${cardClass}`}>
       <div className="flex items-center gap-2">
         <Icon className={`h-4 w-4 shrink-0 ${iconClass}`} strokeWidth={2} aria-hidden />
-        <h3 className="theme-text text-sm font-semibold tracking-tight">{title}</h3>
+        <h3 className="theme-text text-base font-semibold tracking-tight">{title}</h3>
       </div>
-      <p className="theme-text-muted mt-2 font-mono text-xs">{file}</p>
+      <p className="theme-text-muted font-mono text-base">{file}</p>
       {url && (
-        <p className="theme-text-faint mt-1.5 truncate font-mono text-[11px] leading-relaxed">
+        <p className="theme-text-faint truncate font-mono text-[11px] leading-relaxed">
           {url}
         </p>
       )}
@@ -39,42 +45,109 @@ function PreviewCard({ title, file, url, accent, icon: Icon }: PreviewCardProps)
 type Props = {
   cssUrl?: string;
   jsUrl?: string;
-  logs: { id: number; level: string; message: string }[];
-  onClearLogs: () => void;
+  logs: LogEntry[];
+  onClearLogs: () => void | Promise<void>;
 };
 
 export default function PreviewTab({ cssUrl, jsUrl, logs, onClearLogs }: Props) {
+  const logScrollRef = useRef<HTMLDivElement>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const { filters, search, filtersActive } = useLogFilters();
+  const visibleLogs = filterLogs(logs, filters, search);
+
+  useEffect(() => {
+    const el = logScrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      setShowBackToTop(el.scrollTop > 120);
+    };
+
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ block: "end" });
+  }, [visibleLogs]);
+
+  function scrollLogsToTop() {
+    logScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <PreviewCard title="CSS" file="main/styles.css" url={cssUrl} accent="purple" icon={Palette} />
-        <PreviewCard title="JavaScript" file="main/main.js" url={jsUrl} accent="amber" icon={Braces} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <PreviewCard
+          title="CSS"
+          file="main/styles.css"
+          url={cssUrl}
+          tone="purple"
+          icon={Palette}
+        />
+        <PreviewCard
+          title="JavaScript"
+          file="main/main.js"
+          url={jsUrl}
+          tone="yellow"
+          icon={Braces}
+        />
       </div>
 
       <div className="theme-surface-inner glass-inner flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="theme-border-b flex items-center justify-between px-4 py-3">
-          <span className="section-title flex items-center gap-1.5">
-            <ScrollText className="h-3.5 w-3.5 shrink-0 opacity-60" strokeWidth={2} aria-hidden />
-            Activity
-          </span>
-          <button
-            type="button"
-            onClick={onClearLogs}
-            className="btn btn-sm btn-interactive theme-sidebar-btn flex shrink-0 items-center gap-1.5 rounded-xl border-0 px-3 py-2 text-xs font-medium btn-interactive-lime"
-          >
-            <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
-            Clear
-          </button>
+        <div className="theme-border-b flex shrink-0 flex-col gap-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="section-title flex items-center gap-1.5">
+              <ScrollText className="h-3.5 w-3.5 shrink-0 opacity-60" strokeWidth={2} aria-hidden />
+              Activity
+              {filtersActive ? (
+                <span className="theme-text-faint font-normal normal-case tracking-normal">
+                  {visibleLogs.length}/{logs.length}
+                </span>
+              ) : null}
+            </span>
+            <button
+              type="button"
+              onClick={() => void onClearLogs()}
+              className={`${btnNeutralSm} shrink-0`}
+            >
+              <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
+              Clear
+            </button>
+          </div>
+          <LogFilterControls />
         </div>
-        <div className="min-h-[12rem] flex-1 overflow-y-auto p-4 font-mono text-[11px] leading-6">
-          {logs.length === 0 && (
-            <p className="theme-text-faint">No output yet. Start the watcher.</p>
-          )}
-          {logs.map((l) => (
-            <div key={l.id} className={logColor(l.level)}>
-              {l.message}
-            </div>
-          ))}
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={logScrollRef}
+            className="h-full min-h-0 overflow-y-auto overscroll-contain p-4 font-mono text-sm leading-6"
+          >
+            {logs.length === 0 && (
+              <p className="theme-text-faint">No output yet. Start the watcher or rebuild once.</p>
+            )}
+            {logs.length > 0 && visibleLogs.length === 0 && (
+              <p className="theme-text-faint">No lines match the current filters.</p>
+            )}
+            {visibleLogs.map((l) => (
+              <div key={l.id} className={logColor(l.level)}>
+                {l.message}
+              </div>
+            ))}
+            <div ref={logEndRef} aria-hidden />
+          </div>
+          {showBackToTop ? (
+            <button
+              type="button"
+              className={`${btnIcon} log-back-top`}
+              onClick={scrollLogsToTop}
+              aria-label="Back to top of activity log"
+              title="Back to top"
+            >
+              <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

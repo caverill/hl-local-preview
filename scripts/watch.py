@@ -27,7 +27,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 import watch_css
 import watch_js
-from preview_server import start_preview_server, stop_preview_server
+from preview_server import set_serve_root, start_preview_server, stop_preview_server
 
 DEFAULT_ENV_PATH = SCRIPT_DIR.parent / ".env.local"
 MODE_ALIASES = {
@@ -181,6 +181,7 @@ def watch_both(
 
     if serve:
         try:
+            set_serve_root(watch_css.ROOT)
             start_preview_server()
         except RuntimeError as exc:
             print(f"error: {exc}", file=sys.stderr)
@@ -232,6 +233,7 @@ def run_once(
 
     if serve:
         try:
+            set_serve_root(watch_css.ROOT)
             start_preview_server()
         except RuntimeError as exc:
             print(f"error: {exc}", file=sys.stderr)

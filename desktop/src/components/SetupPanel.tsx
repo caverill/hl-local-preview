@@ -5,65 +5,53 @@ import {
   FolderSearch,
   GitBranch,
   Link2,
-  Paintbrush,
-  Puzzle,
+  RefreshCw,
   Save,
   Settings,
   Target,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type GitRepoInfo, type ProjectInfo } from "../lib/api";
 import {
-  detectBrowser,
-  extensionInstallUrl,
-  extensionStoreLabel,
-  type ExtensionId,
-} from "../lib/extensionStores";
-import { MATCH_MODE_OPTIONS, type MatchMode, type SetupValues } from "../lib/setup";
+  btnAccentMd,
+  btnClose,
+  btnDisabled,
+  btnLink,
+  btnNeutralMd,
+  btnNeutralXs,
+  btnPrimaryMd,
+} from "../lib/buttons";
+import { formatRecentDir } from "../lib/logFilters";
+import { DEFAULT_SITE_URL, MATCH_MODE_OPTIONS, type MatchMode, type SetupValues } from "../lib/setup";
 
-const setupBtnClass =
-  "btn btn-md btn-interactive theme-sidebar-btn border-0 rounded-xl btn-interactive-lime";
+const setupIcon = "setup-icon shrink-0";
 
 type Props = {
   open: boolean;
   project: ProjectInfo | null;
   onClose: () => void;
   onSave: (values: SetupValues) => Promise<void>;
-  onCreateFiles: (path: string) => Promise<ProjectInfo & { created: string[] }>;
+  onSaved?: () => void;
+  onCreateFiles: (path: string) => Promise<
+    ProjectInfo & { created: string[]; preview_built?: boolean; preview_error?: string }
+  >;
+  onUpdateFiles: (path: string) => Promise<ProjectInfo & { updated: string[] }>;
+  onSwitchProject?: (path: string) => Promise<void>;
+  watcherRunning?: boolean;
 };
 
-function ExtensionInstallLink({
-  extension,
-  label,
-  icon: Icon,
-  browser,
-}: {
-  extension: ExtensionId;
-  label: string;
-  icon: LucideIcon;
-  browser: ReturnType<typeof detectBrowser>;
-}) {
-  const url = extensionInstallUrl(extension, browser);
-  const store = extensionStoreLabel(browser);
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={`Install ${label} (${store})`}
-      className={`${setupBtnClass} flex flex-1 items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium`}
-    >
-      <Icon className="h-4 w-4 shrink-0 opacity-80" strokeWidth={2} aria-hidden />
-      {label}
-      <ExternalLink className="h-3 w-3 shrink-0 opacity-40" strokeWidth={2} aria-hidden />
-    </a>
-  );
-}
-
-export default function SetupPanel({ open, project, onClose, onSave, onCreateFiles }: Props) {
+export default function SetupPanel({
+  open,
+  project,
+  onClose,
+  onSave,
+  onSaved,
+  onCreateFiles,
+  onUpdateFiles,
+  onSwitchProject,
+  watcherRunning = false,
+}: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [path, setPath] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
@@ -74,9 +62,17 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [outdatedFiles, setOutdatedFiles] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [pathError, setPathError] = useState(false);
+  const [missingFilesError, setMissingFilesError] = useState(false);
+  const [siteUrlError, setSiteUrlError] = useState(false);
 
   const initedForOpenRef = useRef(false);
+  const pathRef = useRef(path);
+  pathRef.current = path;
+  const inspectRequestIdRef = useRef(0);
 
   useEffect(() => {
     if (!open) {
@@ -85,10 +81,11 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     }
     if (!project || initedForOpenRef.current) return;
     setPath(project.path);
-    setSiteUrl(project.site_url);
+    setSiteUrl("");
     setMatchMode(project.match_mode ?? "url-prefix");
     setMatchRegexpPattern(project.match_regexp_pattern ?? "");
     setMissingFiles(project.missing_files);
+    setOutdatedFiles(project.outdated_files ?? []);
     setGitInfo({
       is_git_repo: project.is_git_repo,
       repo_root: project.repo_root,
@@ -97,6 +94,9 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
       branch: project.branch,
     });
     setError("");
+    setPathError(false);
+    setMissingFilesError(false);
+    setSiteUrlError(false);
     initedForOpenRef.current = true;
   }, [open, project]);
 
@@ -120,11 +120,17 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
       setGitInfo(null);
       return;
     }
+    const inspectedPath = path.trim();
+    const requestId = ++inspectRequestIdRef.current;
     const handle = window.setTimeout(() => {
       api
-        .inspectProject(path.trim())
+        .inspectProject(inspectedPath)
         .then((result) => {
+          if (requestId !== inspectRequestIdRef.current) return;
+          if (pathRef.current.trim() !== inspectedPath) return;
           if (result.valid) setMissingFiles(result.missing_files);
+          setOutdatedFiles(result.outdated_files ?? []);
+          setSiteUrl(result.site_url ?? "");
           setGitInfo({
             is_git_repo: result.is_git_repo,
             repo_root: result.repo_root,
@@ -133,22 +139,36 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
             branch: result.branch,
           });
         })
-        .catch(() => setGitInfo(null));
+        .catch(() => {
+          if (requestId !== inspectRequestIdRef.current) return;
+          if (pathRef.current.trim() !== inspectedPath) return;
+          setGitInfo(null);
+        });
     }, 350);
     return () => window.clearTimeout(handle);
   }, [open, path]);
 
+  useEffect(() => {
+    if (missingFiles.length === 0) setMissingFilesError(false);
+  }, [missingFiles.length]);
+
   function applyInspect(result: {
     path: string;
     missing_files: string[];
+    outdated_files?: string[];
+    site_url?: string;
     is_git_repo: boolean;
     repo_root: string | null;
     remote_url: string | null;
     remote_web_url: string | null;
     branch: string | null;
   }) {
+    inspectRequestIdRef.current += 1;
     setPath(result.path);
+    setPathError(false);
     setMissingFiles(result.missing_files);
+    setOutdatedFiles(result.outdated_files ?? []);
+    setSiteUrl(result.site_url ?? "");
     setGitInfo({
       is_git_repo: result.is_git_repo,
       repo_root: result.repo_root,
@@ -156,6 +176,22 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
       remote_web_url: result.remote_web_url,
       branch: result.branch,
     });
+  }
+
+  async function handleRecentFolder(dir: string) {
+    setError("");
+    setPath(dir);
+    setPathError(false);
+    if (onSwitchProject) {
+      setBusy(true);
+      try {
+        await onSwitchProject(dir);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not switch project folder");
+      } finally {
+        setBusy(false);
+      }
+    }
   }
 
   async function handlePickFolder() {
@@ -171,9 +207,27 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     }
   }
 
+  async function handleUpdateFiles() {
+    if (!path.trim()) {
+      setPathError(true);
+      return;
+    }
+    setUpdating(true);
+    setError("");
+    try {
+      const result = await onUpdateFiles(path);
+      setOutdatedFiles(result.outdated_files ?? []);
+      setMissingFiles(result.missing_files);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update project files");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   async function handleCreateFiles() {
     if (!path.trim()) {
-      setError("Choose a project folder first");
+      setPathError(true);
       return;
     }
     setCreating(true);
@@ -181,6 +235,10 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     try {
       const result = await onCreateFiles(path);
       setMissingFiles(result.missing_files);
+      setSiteUrl("");
+      if (result.preview_built === false && result.preview_error) {
+        setError(`Project files created, but preview build failed: ${result.preview_error}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create project files");
     } finally {
@@ -209,10 +267,22 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     gitInfo.repo_root !== path.trim();
 
   async function handleSave() {
-    setBusy(true);
     setError("");
+
+    const nextPathError = !path.trim();
+    const nextMissingFilesError = missingFiles.length > 0;
+    const nextSiteUrlError = !siteUrl.trim();
+
+    setPathError(nextPathError);
+    setMissingFilesError(nextMissingFilesError);
+    setSiteUrlError(nextSiteUrlError);
+
+    if (nextPathError || nextMissingFilesError || nextSiteUrlError) return;
+
+    setBusy(true);
     try {
       await onSave({ path, siteUrl, matchMode, matchRegexpPattern });
+      onSaved?.();
       dialogRef.current?.close();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -221,90 +291,102 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     }
   }
 
-  const disabled = busy || picking || creating;
-  const browser = detectBrowser();
-  const storeLabel = extensionStoreLabel(browser);
+  const disabled = busy || picking || creating || updating;
+  const recentDirs = (project?.recent_dirs ?? []).filter((dir) => dir && dir !== path.trim());
 
   return (
     <dialog ref={dialogRef} className="setup-modal modal">
-      <div className="setup-modal-box modal-box max-h-[min(90vh,60rem)] overflow-y-auto">
+      <div className="setup-modal-box modal-box max-h-[min(90vh,100rem)] overflow-y-auto">
         <form method="dialog">
           <button
             type="submit"
-            className="btn-interactive theme-text-muted absolute right-3 top-3 rounded-full p-1.5 hover:bg-[rgb(var(--hover-bg))] hover:text-[rgb(var(--text))]"
+            className={btnClose}
             aria-label="Close"
           >
             <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </form>
 
-        <h3 className="theme-text flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Settings className="accent-icon h-5 w-5" strokeWidth={2} aria-hidden />
-          Setup
-        </h3>
-        <p className="theme-text-soft mt-1 text-sm">
-          Project folder, dev site URL, and Stylus match mode for CSS preview.
-        </p>
+        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="theme-text flex items-center gap-2 text-xl font-semibold tracking-tight">
+            <Settings className={`${setupIcon} h-5 w-5`} strokeWidth={2} aria-hidden />
+            Setup
+          </h3>
+          <p className="theme-text-soft text-base">
+            Project folder, dev site URL, and Stylus match mode for CSS preview.
+          </p>
+        </div>
 
         {error && (
-          <div
-            role="alert"
-            className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
-          >
+          <div role="alert" className="theme-callout-error">
             {error}
           </div>
         )}
 
-        <fieldset className="mt-6">
+        <fieldset>
           <legend className="section-title mb-2 flex items-center gap-1.5">
-            <Puzzle className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
-            Browser extensions
-          </legend>
-          <p className="theme-text-muted mb-3 text-xs">
-            Install once — links open {storeLabel} for your browser.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <ExtensionInstallLink extension="stylus" label="Stylus" icon={Paintbrush} browser={browser} />
-            <ExtensionInstallLink
-              extension="tampermonkey"
-              label="Tampermonkey"
-              icon={Puzzle}
-              browser={browser}
-            />
-          </div>
-        </fieldset>
-
-        <div className="theme-divider" />
-        <fieldset className="mt-8">
-          <legend className="section-title mb-2 flex items-center gap-1.5">
-            <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+            <FolderOpen className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
             Project folder
+            <span className="setup-required-mark" aria-hidden>
+              *
+            </span>
           </legend>
           <div className="flex gap-2">
             <input
-              className="setup-input min-w-0 flex-1"
+              className={`setup-input min-w-0 flex-1 ${pathError ? "setup-input-error" : ""}`}
               value={path}
-              onChange={(e) => setPath(e.target.value)}
+              onChange={(e) => {
+                setPath(e.target.value);
+                setSiteUrl("");
+                if (pathError) setPathError(false);
+              }}
               placeholder="/path/to/your/project"
+              required
+              aria-required="true"
+              aria-invalid={pathError}
             />
             <button
               type="button"
-              className={`${setupBtnClass} flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm font-medium ${disabled ? "pointer-events-none opacity-50" : ""
-                }`}
+              className={`${btnNeutralMd} shrink-0 ${disabled ? btnDisabled : ""}`}
               aria-disabled={disabled}
               onClick={disabled ? undefined : handlePickFolder}
             >
-              <FolderSearch className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              <FolderSearch className={`${setupIcon} h-4 w-4`} strokeWidth={2} aria-hidden />
               {picking ? "…" : "Browse"}
             </button>
           </div>
+          {pathError ? (
+            <p className="setup-field-error" role="alert">
+              Choose a project folder before saving.
+            </p>
+          ) : null}
+          {recentDirs.length > 0 ? (
+            <div className="mt-2 flex flex-col gap-1.5">
+              <span className="theme-text-faint text-[11px] uppercase tracking-[0.12em]">Recent</span>
+              <div className="flex flex-wrap gap-1.5">
+                {recentDirs.map((dir) => (
+                  <button
+                    key={dir}
+                    type="button"
+                    className={`${btnNeutralXs} max-w-full truncate`}
+                    title={dir}
+                    disabled={disabled}
+                    onClick={() => void handleRecentFolder(dir)}
+                  >
+                    {formatRecentDir(dir)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </fieldset>
         {gitInfo?.is_git_repo && (
-          <div className="theme-git-panel mt-3 rounded-xl border px-4 py-3">
+          <div className="theme-git-panel rounded-xl border px-4 py-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="theme-text flex items-center gap-1.5 text-sm font-medium">
-                  <GitBranch className="accent-icon h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+                <p className="theme-text flex items-center gap-1.5 text-base font-medium">
+                  <GitBranch className={`${setupIcon} h-4 w-4`} strokeWidth={2} aria-hidden />
                   Git repository
                   {gitInfo.branch ? (
                     <span className="theme-text-muted font-normal">· {gitInfo.branch}</span>
@@ -318,19 +400,19 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button
                   type="button"
-                  className={`${setupBtnClass} flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium`}
+                  className={btnNeutralXs}
                   onClick={() => gitInfo.repo_root && handleOpenFolder(gitInfo.repo_root)}
                 >
-                  <FolderOpen className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  <FolderOpen className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
                   Open folder
                 </button>
                 {gitInfo.remote_web_url ? (
                   <button
                     type="button"
-                    className={`${setupBtnClass} flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium`}
+                    className={btnNeutralXs}
                     onClick={() => window.open(gitInfo.remote_web_url!, "_blank", "noopener,noreferrer")}
                   >
-                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    <ExternalLink className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
                     Open remote
                   </button>
                 ) : null}
@@ -339,7 +421,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
             {repoRootDiffers ? (
               <button
                 type="button"
-                className="btn-interactive accent-link mt-3 text-xs font-medium"
+                className={`${btnLink} mt-2`}
                 onClick={handleUseRepoRoot}
               >
                 Use repo root instead
@@ -349,48 +431,107 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
         )}
 
         {path.trim() && gitInfo && !gitInfo.is_git_repo ? (
-          <p className="theme-text-faint mt-2 text-xs">No Git repository found in this folder or its parents.</p>
+          <p className="theme-text-faint text-base">No Git repository found in this folder or its parents.</p>
         ) : null}
+        
 
         {missingFiles.length > 0 && (
-          <div className="mt-4 rounded-xl border border-amber-400/25 bg-amber-500/10 p-4">
-            <p className="text-sm font-medium text-amber-100">
+          <div
+            className={`theme-git-panel rounded-xl border p-4 ${missingFilesError ? "setup-panel-error" : ""}`}
+            aria-invalid={missingFilesError}
+          >
+            <p className="setup-missing-title">
               {missingFiles.length} required file{missingFiles.length === 1 ? "" : "s"} missing
             </p>
-            <ul className="mt-2 space-y-1 font-mono text-[11px] text-amber-100/70">
+            <ul className="theme-text-muted mt-2 space-y-1 font-mono text-[11px]">
               {missingFiles.map((file) => (
                 <li key={file}>{file}</li>
               ))}
             </ul>
             <button
               type="button"
-              className={`btn-interactive accent-btn-subtle btn-interactive-lime mt-3 flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium ${disabled ? "pointer-events-none opacity-50" : ""
-                }`}
+              className={`${btnAccentMd} mt-2 ${disabled ? btnDisabled : ""}`}
               aria-disabled={disabled}
               onClick={disabled ? undefined : handleCreateFiles}
             >
-              <FilePlus className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              <FilePlus className={`${setupIcon} h-4 w-4`} strokeWidth={2} aria-hidden />
               {creating ? "Creating…" : "Create project files"}
             </button>
+            {missingFilesError ? (
+              <p className="setup-field-error" role="alert">
+                Create the missing project files before saving.
+              </p>
+            ) : null}
           </div>
         )}
-        <div className="theme-divider"></div>
-        <fieldset className="mt-5">
+
+        {missingFiles.length === 0 && outdatedFiles.length > 0 && (
+          <div className="theme-callout-warn rounded-xl border p-4">
+            <p className="text-base font-medium">
+              {outdatedFiles.length} toolkit file{outdatedFiles.length === 1 ? "" : "s"} behind this
+              app
+            </p>
+            <p className="theme-text-soft mt-1 text-[11px] leading-snug">
+              Updates scripts and templates from HL Local Preview. Does not change{" "}
+              <span className="font-mono">main/styles.css</span>,{" "}
+              <span className="font-mono">main/main.js</span>, or{" "}
+              <span className="font-mono">.env.local</span>.
+            </p>
+            <ul className="theme-text-muted mt-2 space-y-1 font-mono text-[11px]">
+              {outdatedFiles.map((file) => (
+                <li key={file}>{file}</li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className={`${btnNeutralMd} mt-3 ${disabled || watcherRunning ? btnDisabled : ""}`}
+              aria-disabled={disabled || watcherRunning}
+              onClick={disabled || watcherRunning ? undefined : handleUpdateFiles}
+            >
+              <RefreshCw
+                className={`${setupIcon} h-4 w-4 ${updating ? "animate-spin" : ""}`}
+                strokeWidth={2}
+                aria-hidden
+              />
+              {updating ? "Updating…" : "Update project files"}
+            </button>
+            {watcherRunning ? (
+              <p className="theme-text-faint mt-2 text-[11px]">Stop the watcher before updating.</p>
+            ) : null}
+          </div>
+        )}
+        <div className="theme-divider" />
+        
+        <fieldset>
           <legend className="section-title mb-2 flex items-center gap-1.5">
-            <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+            <Link2 className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
             SITE_URL
+            <span className="setup-required-mark" aria-hidden>
+              *
+            </span>
           </legend>
           <input
-            className="setup-input"
-            placeholder="https://example.com/sandbox/"
+            className={`setup-input ${siteUrlError ? "setup-input-error" : ""}`}
+            placeholder={DEFAULT_SITE_URL}
             value={siteUrl}
-            onChange={(e) => setSiteUrl(e.target.value)}
+            onChange={(e) => {
+              setSiteUrl(e.target.value);
+              if (siteUrlError) setSiteUrlError(false);
+            }}
+            required
+            aria-required="true"
+            aria-invalid={siteUrlError}
           />
+          {siteUrlError ? (
+            <p className="setup-field-error" role="alert">
+              SITE_URL is required — enter your dev site URL before saving.
+            </p>
+          ) : null}
         </fieldset>
-        <div className="theme-divider"></div>
-        <fieldset className="mt-5">
+        <div className="theme-divider" />
+        <fieldset>
           <legend className="section-title mb-2 flex items-center gap-1.5">
-            <Target className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+            <Target className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
             CSS match mode
           </legend>
           <div className="flex flex-col gap-2">
@@ -409,15 +550,15 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
                   onChange={() => setMatchMode(id)}
                 />
                 <span>
-                  <span className="theme-text block text-sm font-medium">{label}</span>
-                  <span className="theme-text-muted block text-xs">{hint}</span>
+                  <span className="theme-text block text-base font-medium">{label}</span>
+                  <span className="theme-text-muted block text-base">{hint}</span>
                 </span>
               </label>
             ))}
           </div>
           {matchMode === "regexp" && (
             <input
-              className="setup-input mt-3"
+              className="setup-input mt-2"
               placeholder="^https://example\\.com/sandbox/.*$"
               value={matchRegexpPattern}
               onChange={(e) => setMatchRegexpPattern(e.target.value)}
@@ -425,11 +566,19 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
           )}
         </fieldset>
 
-        <div className="modal-action mt-8 gap-2">
+        <div className="theme-divider" />
+        <p className="theme-callout-info flex items-start gap-2 text-base leading-relaxed">
+          <Target className={`${setupIcon} mt-0.5 h-4 w-4 shrink-0`} strokeWidth={2} aria-hidden />
+          <span>
+            After you save, open <span className="theme-text font-medium">Diagnostics</span> to install
+            browser extensions and finish the ready check.
+          </span>
+        </p>
+        <div className="modal-action gap-2">
           <form method="dialog">
             <button
               type="submit"
-              className={`${setupBtnClass} px-4 py-2 text-sm font-medium`}
+              className={btnNeutralMd}
               disabled={busy}
             >
               Cancel
@@ -437,14 +586,14 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
           </form>
           <button
             type="button"
-            className={`btn-interactive accent-btn-solid btn-interactive-lime flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold hover:brightness-95 ${busy ? "pointer-events-none opacity-50" : ""
-              }`}
+            className={`${btnPrimaryMd} ${busy ? btnDisabled : ""}`}
             aria-disabled={busy}
             onClick={busy ? undefined : handleSave}
           >
             <Save className="h-4 w-4" strokeWidth={2} aria-hidden />
             {busy ? "Saving…" : "Save"}
           </button>
+        </div>
         </div>
       </div>
       <form method="dialog" className="modal-backdrop">
@@ -453,5 +602,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
         </button>
       </form>
     </dialog>
+    
   );
+  
 }

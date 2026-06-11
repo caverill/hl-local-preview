@@ -1,4 +1,10 @@
 /**
- * CMS custom CSS — upload to production when ready.
+ * CMS custom CSS — edit here and upload to production when ready.
+ *
+ * DevTools tip: If styles aren't applying, verify the Stylus install tab is open with live reload
+ * enabled. If the issue persists, restart the watcher or reinstall from Quick Links.
+ *
+ * To clear injected styles, delete your CSS rules below and save. This header can stay —
+ * the watcher treats a comment-only file as empty. If old styles still hang, reinstall
+ * from Quick Links or turn Stylus off and on once.
  */
-

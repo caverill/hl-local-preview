@@ -12,6 +12,8 @@ Usage:
 from __future__ import annotations
 
 import difflib
+import json
+import re
 from datetime import datetime
 import sys
 import threading
@@ -24,7 +26,7 @@ from urllib.parse import urlparse
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from preview_server import PREVIEW_PORT, start_preview_server, stop_preview_server
+from preview_server import PREVIEW_PORT, set_serve_root, start_preview_server, stop_preview_server
 
 ROOT = SCRIPT_DIR.parent
 DEFAULT_ENV_PATH = ROOT / ".env.local"
@@ -120,15 +122,58 @@ def indent_css(css: str) -> str:
     return "\n".join(f"  {line}" if line else "" for line in css.rstrip().splitlines())
 
 
-def build_user_css(styles: str, config: Config) -> str:
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
+
+
+def strip_css_comments(text: str) -> str:
+    without_block = _BLOCK_COMMENT_RE.sub("", text)
+    return _LINE_COMMENT_RE.sub("", without_block)
+
+
+def has_effective_css(styles: str) -> bool:
+    """True when styles contain selectors, properties, or at-rules — not just comments."""
+    return bool(strip_css_comments(styles).strip())
+
+
+def revision_config_path(config: Config) -> Path:
+    return config.output_path.parent / f"{config.preview_name}.revision.json"
+
+
+def write_revision_config(config: Config, revision: int) -> None:
+    revision_config_path(config).write_text(
+        json.dumps({"revision": revision}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def format_preview_body(styles: str, *, revision: int) -> str:
+    """Stylus live reload may not clear old rules from comment-only blocks — keep a real rule."""
+    marker = f"  /* preview-revision: {revision} */\n"
+    if not has_effective_css(styles):
+        # Minimal no-op rule only — source comments stay in main/styles.css, not the preview file.
+        return (
+            f"{marker}"
+            "  html {\n"
+            "    /* hl-local-preview: no custom styles */\n"
+            "  }"
+        )
+    return marker + indent_css(styles)
+
+
+def build_user_css(styles: str, config: Config, *, revision: int) -> str:
+    update_url = preview_install_url(config, revision=revision)
+    version = f"0.0.{revision}"
     header = f"""/* ==UserStyle==
 @name           {config.preview_name}
 @namespace      higherlogic-local-dev
-@version        1.0.0
+@version        {version}
+@updateURL      {update_url}
+@author         Cailee Averill
 @description    Local CMS preview CSS generated from production styles
 ==/UserStyle== */
 """
-    body = indent_css(styles)
+    body = format_preview_body(styles, revision=revision)
     blocks = [f"@-moz-document {rule} {{\n{body}\n}}" for rule in matching_rules(config)]
     return header + "\n" + "\n\n".join(blocks) + "\n"
 
@@ -231,29 +276,28 @@ def sync_preview(config: Config, previous_styles: str | None, *, log_change: boo
         return None
 
     styles = config.source_css.read_text(encoding="utf-8")
-    preview = build_user_css(styles, config)
     config.output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    preview_unchanged = (
-        config.output_path.exists()
-        and config.output_path.read_text(encoding="utf-8") == preview
-    )
-    source_unchanged = styles_are_equal(previous_styles, styles)
-
-    if preview_unchanged:
-        if log_change and (source_unchanged or previous_styles is not None):
+    if previous_styles is not None and styles_are_equal(previous_styles, styles):
+        if log_change:
             print_sync_status(config, previous_styles, styles, changed=False)
         return styles
 
+    revision = int(time.time() * 1000)
+    preview = build_user_css(styles, config, revision=revision)
     config.output_path.write_text(preview, encoding="utf-8")
+    write_revision_config(config, revision)
     if log_change:
         print_sync_status(config, previous_styles, styles, changed=True)
     return styles
 
 
-def preview_install_url(config: Config) -> str:
+def preview_install_url(config: Config, *, revision: int | None = None) -> str:
     rel = config.output_path.relative_to(ROOT).as_posix()
-    return f"http://127.0.0.1:{PREVIEW_PORT}/{rel}"
+    base = f"http://127.0.0.1:{PREVIEW_PORT}/{rel}"
+    if revision is None:
+        return base
+    return f"{base}?rev={revision}"
 
 
 def open_stylus_install_tab(config: Config) -> None:
@@ -317,6 +361,7 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
 
     if serve:
         try:
+            set_serve_root(ROOT)
             start_preview_server()
         except RuntimeError as exc:
             print(f"error: {exc}", file=sys.stderr)

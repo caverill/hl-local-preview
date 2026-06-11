@@ -1,5 +1,6 @@
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "../hooks/ThemeContext";
+import { btnGhostSm, btnNeutralBlockLeft } from "../lib/buttons";
 
 type Props = {
   variant?: "nav" | "sidebar";
@@ -14,11 +15,7 @@ export default function ThemeToggle({ variant = "nav" }: Props) {
   return (
     <button
       type="button"
-      className={
-        sidebar
-          ? "btn btn-sm btn-interactive theme-sidebar-btn flex h-auto min-h-0 w-full items-center gap-2 rounded-xl border-0 py-2.5 text-left text-sm font-medium btn-interactive-lime"
-          : "btn btn-ghost btn-sm btn-interactive theme-btn-ghost flex items-center gap-1.5 rounded-full px-4 text-xs font-medium tracking-wide"
-      }
+      className={sidebar ? btnNeutralBlockLeft : `${btnGhostSm} tracking-wide`}
       onClick={toggleTheme}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       title={isDark ? "Light mode" : "Dark mode"}

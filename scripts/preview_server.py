@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import http.server
+import json
 import socket
 import socketserver
 import threading
@@ -12,13 +13,36 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
 PREVIEW_PORT = 5500
+ROOT_MARKER_PATH = "/.hl-preview-root"
 
+_serve_root = ROOT
 _httpd: socketserver.TCPServer | None = None
+
+
+def get_serve_root() -> Path:
+    return _serve_root
+
+
+def set_serve_root(path: Path) -> None:
+    global _serve_root
+    _serve_root = path.resolve()
 
 
 class PreviewHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(ROOT), **kwargs)
+        super().__init__(*args, directory=str(_serve_root), **kwargs)
+
+    def do_GET(self) -> None:
+        if self.path.split("?", 1)[0] == ROOT_MARKER_PATH:
+            payload = json.dumps({"root": str(_serve_root)}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        super().do_GET()
 
     def guess_type(self, path: str) -> str:
         if path.endswith(".user.js") or path.endswith(".js"):
@@ -64,8 +88,36 @@ def start_preview_server() -> None:
 
     if port_is_open(PREVIEW_PORT):
         if preview_server_is_responding():
-            print(f"Preview server already running on port {PREVIEW_PORT}")
-            return
+            remote_root = None
+            try:
+                with urlopen(f"http://127.0.0.1:{PREVIEW_PORT}{ROOT_MARKER_PATH}", timeout=1.0) as resp:
+                    remote_root = json.loads(resp.read().decode("utf-8")).get("root")
+            except OSError:
+                remote_root = None
+            if remote_root is not None and remote_root == str(_serve_root):
+                print(f"Preview server already running on port {PREVIEW_PORT}")
+                return
+            print(
+                f"Replacing preview server on port {PREVIEW_PORT} "
+                f"(was {remote_root or 'unknown'}, now {_serve_root})"
+            )
+            if _httpd is not None:
+                _httpd.shutdown()
+                _httpd.server_close()
+                _httpd = None
+            else:
+                import subprocess
+
+                result = subprocess.run(
+                    ["lsof", f"-iTCP:{PREVIEW_PORT}", "-sTCP:LISTEN", "-t"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                for pid in result.stdout.strip().split():
+                    if pid.isdigit():
+                        subprocess.run(["kill", pid], check=False)
+                time.sleep(0.2)
         raise RuntimeError(
             f"Port {PREVIEW_PORT} is in use but not responding. "
             f"Stop the old process: lsof -iTCP:{PREVIEW_PORT} -sTCP:LISTEN -t | xargs kill"

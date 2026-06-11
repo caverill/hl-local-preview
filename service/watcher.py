@@ -4,6 +4,7 @@ import subprocess
 import threading
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -19,15 +20,23 @@ class WatcherState:
     running: bool = False
     mode: str = "both"
     project_dir: Path | None = None
+    last_rebuild_at: str | None = None
     _proc: subprocess.Popen[str] | None = field(default=None, repr=False)
     _log_id: int = 0
     _logs: deque[LogEntry] = field(default_factory=lambda: deque(maxlen=500))
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+    def note_rebuild(self) -> None:
+        with self._lock:
+            self.last_rebuild_at = datetime.now(timezone.utc).isoformat()
+
     def append_log(self, level: str, message: str) -> None:
         with self._lock:
             self._log_id += 1
             self._logs.append(LogEntry(self._log_id, level, message))
+            lower = message.lower()
+            if level == "ok" and ("rebuilt" in lower or "updated" in lower):
+                self.last_rebuild_at = datetime.now(timezone.utc).isoformat()
 
     def logs_since(self, since_id: int = 0) -> list[dict]:
         with self._lock:
@@ -36,6 +45,16 @@ class WatcherState:
                 for e in self._logs
                 if e.id > since_id
             ]
+
+    def log_cursor(self) -> int:
+        with self._lock:
+            return self._log_id
+
+    def clear_logs(self) -> int:
+        """Drop buffered log lines; return the current id cursor for since= polling."""
+        with self._lock:
+            self._logs.clear()
+            return self._log_id
 
     def _classify(self, line: str) -> str:
         lower = line.lower()
@@ -89,13 +108,15 @@ class WatcherState:
         assert self._proc.stdout and self._proc.stderr
         threading.Thread(target=self._reader, args=(self._proc.stdout, "info"), daemon=True).start()
         threading.Thread(target=self._reader, args=(self._proc.stderr, "err"), daemon=True).start()
-        threading.Thread(target=self._wait, daemon=True).start()
+        proc = self._proc
+        threading.Thread(target=self._wait, args=(proc,), daemon=True).start()
 
-    def _wait(self) -> None:
-        if not self._proc:
+    def _wait(self, proc: subprocess.Popen[str]) -> None:
+        code = proc.wait()
+        if self._proc is not proc:
             return
-        code = self._proc.wait()
         self.running = False
+        self._proc = None
         if code != 0:
             self.append_log("warn", f"Watcher exited (code {code})")
 
@@ -110,8 +131,11 @@ class WatcherState:
         self.running = False
 
     def restart(self) -> None:
-        if self.project_dir:
-            self.start(self.project_dir, self.mode)
+        if not self.project_dir:
+            return
+        mode = self.mode
+        self.append_log("cmd", f"Restarting watcher ({mode})…")
+        self.start(self.project_dir, mode)
 
 
 state = WatcherState()

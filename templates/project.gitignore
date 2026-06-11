@@ -1,0 +1,6 @@
+# HL Local Preview — only commit production theme files under main/
+*
+
+!.gitignore
+!main/
+!main/**

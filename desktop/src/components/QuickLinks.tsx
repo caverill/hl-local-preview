@@ -8,7 +8,8 @@ import {
   Puzzle,
   type LucideIcon,
 } from "lucide-react";
-import type { EditorInfo } from "../lib/api";
+import { type EditorInfo } from "../lib/api";
+import { btnDisabled, btnNeutralBlockLeft } from "../lib/buttons";
 import { usePreviewContext } from "../hooks/PreviewContext";
 import SidebarCard from "./SidebarCard";
 
@@ -26,9 +27,7 @@ function LinkButton({ label, icon: Icon, url, inactive = false, onOpen }: LinkBu
   return (
     <button
       type="button"
-      className={`btn btn-sm btn-interactive theme-sidebar-btn relative flex h-auto min-h-0 w-full items-center gap-2 rounded-xl border-0 py-2.5 text-left text-sm font-medium btn-interactive-lime ${
-        disabled ? "pointer-events-none opacity-40" : ""
-      }`}
+      className={`${btnNeutralBlockLeft} ${disabled ? btnDisabled : ""}`}
       aria-disabled={disabled}
       onClick={disabled ? undefined : () => onOpen(url!)}
     >
@@ -39,10 +38,22 @@ function LinkButton({ label, icon: Icon, url, inactive = false, onOpen }: LinkBu
   );
 }
 
+function modeIncludesCss(mode: string | null | undefined) {
+  return mode === "css" || mode === "both";
+}
+
+function modeIncludesJs(mode: string | null | undefined) {
+  return mode === "js" || mode === "both";
+}
+
 export default function QuickLinks() {
-  const { project, status, editors, openUrl, openInEditor, setError } = usePreviewContext();
+  const { project, status, editors, online, running, openUrl, openInEditor, setError } =
+    usePreviewContext();
   const urls = project?.urls;
   const previewLive = status?.preview_port_open ?? false;
+  const watcherMode = status?.watcher_mode;
+  const cssModeActive = running && modeIncludesCss(watcherMode);
+  const jsModeActive = running && modeIncludesJs(watcherMode);
   const availableEditors = editors.filter((e) => e.available);
 
   async function handleOpenInEditor(editor: EditorInfo["id"]) {
@@ -60,14 +71,14 @@ export default function QuickLinks() {
         label="Stylus Install"
         icon={Paintbrush}
         url={urls?.stylus}
-        inactive={!previewLive}
+        inactive={!cssModeActive || !previewLive}
         onOpen={openUrl}
       />
       <LinkButton
         label="Tampermonkey Install"
         icon={Puzzle}
         url={urls?.tampermonkey_loader}
-        inactive={!previewLive}
+        inactive={!jsModeActive || !online}
         onOpen={openUrl}
       />
       <LinkButton label="Dev Site" icon={Globe} url={urls?.site} onOpen={openUrl} />
@@ -82,7 +93,7 @@ export default function QuickLinks() {
       {project?.path && availableEditors.length > 0 ? (
         <button
           type="button"
-          className="btn btn-sm btn-interactive theme-sidebar-btn flex h-auto min-h-0 w-full items-center gap-2 rounded-xl border-0 py-2.5 text-left text-sm font-medium btn-interactive-lime"
+          className={btnNeutralBlockLeft}
           onClick={() => handleOpenInEditor(availableEditors[0]!.id)}
         >
           <Code2 className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
