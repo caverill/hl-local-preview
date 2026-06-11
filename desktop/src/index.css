@@ -44,6 +44,10 @@
     --warn-bg: 245 158 11 / 0.1;
     --warn-border: 251 191 36 / 0.2;
     --warn-text: 254 243 199 / 0.8;
+    --info-bg: 59 130 246 / 0.14;
+    --info-border: 96 165 250 / 0.35;
+    --info-text: 219 234 254 / 0.95;
+    --info-icon: 125 211 252;
     --radio-bg: 28 25 23 / 0.4;
     --radio-border: 255 255 255 / 0.1;
     --radio-border-hover: 255 255 255 / 0.2;
@@ -99,6 +103,10 @@
     --warn-bg: 254 243 199 / 0.65;
     --warn-border: 245 158 11 / 0.35;
     --warn-text: 120 53 15 / 0.85;
+    --info-bg: 239 246 255 / 0.95;
+    --info-border: 147 197 253 / 0.7;
+    --info-text: 30 64 175 / 0.92;
+    --info-icon: 37 99 235;
     --radio-bg: 248 250 252 / 0.95;
     --radio-border: 15 23 42 / 0.1;
     --radio-border-hover: 15 23 42 / 0.18;
@@ -116,7 +124,7 @@
 
   html {
     @apply antialiased;
-    font-size: 16px;
+    font-size: 18px;
   }
 
   body {
@@ -278,7 +286,7 @@
   }
 
   .ui-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border-0 font-medium;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border-0 text-base font-medium;
     cursor: pointer;
     transition:
       transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
@@ -299,15 +307,15 @@
   }
 
   .ui-btn-xs {
-    @apply px-3 py-1.5 text-xs;
+    @apply px-3 py-1.5;
   }
 
   .ui-btn-sm {
-    @apply px-3 py-2 text-xs;
+    @apply px-3 py-2;
   }
 
   .ui-btn-md {
-    @apply px-4 py-2.5 text-sm;
+    @apply px-4 py-2.5;
   }
 
   .ui-btn-icon {
@@ -361,6 +369,17 @@
     box-shadow: 0 8px 28px rgb(239 68 68 / 0.32);
   }
 
+  .ui-btn-restarting {
+    background-color: rgb(249 115 22);
+    color: white;
+    box-shadow: 0 4px 20px rgb(249 115 22 / 0.35);
+  }
+
+  .ui-btn-restarting:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: rgb(234 88 12);
+    box-shadow: 0 8px 28px rgb(249 115 22 / 0.4);
+  }
+
   .ui-btn-ghost {
     border: 1px solid rgb(var(--ghost-border));
     background-color: transparent;
@@ -375,6 +394,7 @@
   }
 
   .ui-btn-link {
+    @apply text-base;
     cursor: pointer;
     color: rgb(var(--accent));
     transition: color 0.22s ease;
@@ -401,6 +421,10 @@
     @apply border-amber-400/25 bg-amber-500/5;
   }
 
+  .preview-card-blue {
+    @apply border-blue-400/25 bg-blue-500/5;
+  }
+
   .tab-pill {
     cursor: pointer;
     transition:
@@ -425,7 +449,7 @@
   }
 
   .theme-alert {
-    @apply rounded-xl border px-4 py-3 text-sm;
+    @apply rounded-xl border px-4 py-3 text-base;
     border-color: rgb(245 158 11 / 0.35);
     background-color: rgb(var(--warn-bg));
     color: rgb(180 83 9 / 0.9);
@@ -435,13 +459,84 @@
     color: rgb(254 243 199 / 0.9);
   }
 
+  .theme-callout-info {
+    @apply rounded-xl border px-4 py-3 text-base;
+    border-color: rgb(var(--info-border));
+    background-color: rgb(var(--info-bg));
+    color: rgb(var(--info-text));
+  }
+
+  .theme-callout-info-icon {
+    color: rgb(var(--info-icon));
+  }
+
+  .setup-modal {
+    --setup-error: 185 28 28;
+  }
+
+  [data-theme="dark"] .setup-modal {
+    --setup-error: 251 8 8;
+  }
+
   .setup-modal::backdrop {
     background-color: rgb(var(--backdrop));
     backdrop-filter: blur(4px);
   }
 
+  .how-to-modal .how-to-modal-box {
+    max-width: 40rem;
+  }
+
+  .how-to-media {
+    @apply glass-inner aspect-video w-full overflow-hidden rounded-xl border;
+    background-color: rgb(var(--surface-inner));
+  }
+
+  .how-to-media img,
+  .how-to-media video {
+    @apply h-full w-full object-contain;
+  }
+
+  .how-to-media-placeholder {
+    @apply flex h-full w-full flex-col items-center justify-center p-6;
+  }
+
+  .how-to-media-tabs {
+    display: flex;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    padding: 0.25rem;
+    background-color: rgb(var(--tab-bar));
+  }
+
+  .how-to-media-tab {
+    flex: 1;
+    border: 0;
+    border-radius: 9999px;
+    padding: 0.5rem 1rem;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgb(var(--text-dim));
+    background: transparent;
+    cursor: pointer;
+    transition:
+      background-color 0.22s ease,
+      color 0.22s ease;
+  }
+
+  .how-to-media-tab:hover {
+    color: rgb(var(--text));
+  }
+
+  .how-to-media-tab-active {
+    background-color: rgb(var(--accent-solid));
+    color: rgb(var(--accent-on));
+  }
+
   .setup-modal .setup-modal-box {
-    max-width: 28rem;
+    max-width: 50rem;
     padding: 1.5rem;
     border-radius: 1rem;
     border: 1px solid rgb(var(--glass-border));
@@ -457,8 +552,8 @@
     background-color: rgb(var(--input-bg));
     padding: 0.625rem 1rem;
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.5rem;
     color: rgb(var(--text));
   }
 
@@ -470,6 +565,31 @@
     outline: none;
     border-color: rgb(var(--accent-ring));
     box-shadow: 0 0 0 2px rgb(var(--accent-subtle-bg));
+  }
+
+  .setup-input-error,
+  .setup-panel-error {
+    border-color: rgb(var(--setup-error));
+  }
+
+  .setup-input-error:focus {
+    border-color: rgb(var(--setup-error));
+    box-shadow: 0 0 0 2px rgb(var(--setup-error) / 0.35);
+  }
+
+  .setup-field-error,
+  .setup-required-mark {
+    color: rgb(var(--setup-error));
+  }
+
+  .setup-field-error {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .setup-required-mark {
+    font-weight: 700;
   }
 
   .setup-modal fieldset {
@@ -528,12 +648,8 @@
   }
 
   .setup-missing-title {
-    @apply text-sm font-medium;
-    color: rgb(185 28 28);
-  }
-
-  [data-theme="dark"] .setup-modal .setup-missing-title {
-    color: rgb(251, 8, 8);
+    @apply text-base font-medium;
+    color: rgb(var(--setup-error));
   }
 
   .setup-radio input[type="radio"] {
@@ -606,6 +722,14 @@
     @apply h-px w-full shrink-0;
     background-color: rgb(var(--glass-border));
   }
+
+  .log-back-top {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 10;
+    box-shadow: 0 8px 24px rgb(var(--btn-shadow));
+  }
 }
 
 @layer utilities {
@@ -633,7 +757,8 @@
 @media (prefers-reduced-motion: reduce) {
   .ui-btn,
   .tab-pill,
-  .animate-indicator-flash {
+  .animate-indicator-flash,
+  .animate-spin {
     transition: none !important;
     animation: none !important;
   }

@@ -43,6 +43,7 @@ export type ProjectInspect = {
   path: string;
   valid: boolean;
   missing_files: string[];
+  site_url: string;
 } & GitRepoInfo;
 
 export type SetupPayload = {
@@ -90,7 +91,8 @@ export const api = {
     request("/api/watcher/start", { method: "POST", body: JSON.stringify({ mode }) }),
   stopWatcher: () => request("/api/watcher/stop", { method: "POST", body: "{}" }),
   restartWatcher: () => request("/api/watcher/restart", { method: "POST", body: "{}" }),
-  logs: (since = 0) => request<{ entries: LogEntry[] }>(`/api/logs?since=${since}`),
+  logs: (since = 0) => request<{ entries: LogEntry[]; cursor: number }>(`/api/logs?since=${since}`),
+  clearLogs: () => request<{ ok: boolean; since: number }>("/api/logs/clear", { method: "POST", body: "{}" }),
   diagnostics: () => request<{ checks: Check[] }>("/api/diagnostics"),
   installDeps: () => request("/api/deps/install", { method: "POST", body: "{}" }),
   openUrl: (url: string) =>

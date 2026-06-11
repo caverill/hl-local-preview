@@ -35,7 +35,7 @@ export default function DiagnosticsTab() {
         </span>
         <button
           type="button"
-          className={`${btnGhostSm} shrink-0 text-[11px] tracking-wide`}
+          className={`${btnGhostSm} shrink-0 tracking-wide`}
           disabled={installing}
           onClick={handleInstall}
         >
@@ -43,11 +43,14 @@ export default function DiagnosticsTab() {
           {installing ? "Installing…" : "pip install"}
         </button>
       </div>
-
+      <p className="theme-callout-warn glass-inner flex items-start gap-2 p-4 text-base leading-relaxed">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400/80" strokeWidth={2} aria-hidden />
+        Stylus and Tampermonkey installs must be approved manually in your browser.
+      </p>
       <div className="flex flex-col gap-2">
         {checks.map((c) => (
           <div key={c.label} className="pill-row">
-            <span className="theme-text-body text-sm">{c.label}</span>
+            <span className="theme-text-body text-base">{c.label}</span>
             {c.status === "ok" ? (
               <CheckCircle2 className="accent-text h-4 w-4 shrink-0" strokeWidth={2} aria-label="OK" />
             ) : (
@@ -56,11 +59,6 @@ export default function DiagnosticsTab() {
           </div>
         ))}
       </div>
-
-      <p className="theme-callout-warn glass-inner flex items-start gap-2 p-4 text-xs leading-relaxed">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400/80" strokeWidth={2} aria-hidden />
-        Stylus and Tampermonkey installs must be approved manually in your browser.
-      </p>
     </div>
   );
 }

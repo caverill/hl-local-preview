@@ -36,8 +36,14 @@ ALL_PROJECT_FILES = [
 
 PROJECT_GITIGNORE_TEMPLATE = REPO_ROOT / "templates" / "project.gitignore"
 
+# Read at scaffold time (not import time) so template edits apply without restarting the API.
+SCAFFOLD_TEMPLATE_FILES = {
+    "main/styles.css": REPO_ROOT / "templates" / "main.styles.css",
+    "main/main.js": REPO_ROOT / "templates" / "main.main.js",
+}
+
 TEMPLATE_ENV = """\
-SITE_URL=https://example.com/your-sandbox/
+SITE_URL=
 CMS_LOCAL_PREVIEW_NAME=cms-local-preview
 SOURCE_CSS=main/styles.css
 JS_LOCAL_PREVIEW_NAME=js-local-preview
@@ -52,23 +58,16 @@ MATCH_REGEXP=false
 """
 
 INLINE_TEMPLATES = {
-    "main/styles.css": "/* CMS custom CSS — edit and upload when ready */\n",
-    "main/main.js": (
-        "/**\n"
-        " * CMS custom JavaScript — copy this file to production when ready.\n"
-        " *\n"
-        " * DevTools tip: filter the console with MAIN_PREFIX to see only this script's logs.\n"
-        " */\n"
-        "\n"
-        "const MAIN_PREFIX = \"[hl-js-local-preview:main]\";\n"
-        "\n"
-        "$(function () {\n"
-        "  console.log(MAIN_PREFIX + \" ready\");\n"
-        "});\n"
-    ),
     "requirements.txt": "watchdog>=3.0.0\nflask>=3.0.0\nflask-cors>=4.0.0\n",
     ".env.local.example": TEMPLATE_ENV,
 }
+
+
+def scaffold_template_text(rel: str) -> str | None:
+    path = SCAFFOLD_TEMPLATE_FILES.get(rel)
+    if path and path.is_file():
+        return path.read_text(encoding="utf-8")
+    return INLINE_TEMPLATES.get(rel)
 
 
 def load_settings() -> dict:
@@ -252,17 +251,20 @@ def git_repo_info(path: Path) -> dict:
 
 
 def inspect_project_path(path: Path) -> dict:
+    env = load_env(path / ".env.local") if path.is_dir() else {}
     if not path.is_dir():
         return {
             "path": str(path),
             "valid": False,
             "missing_files": [],
+            "site_url": env.get("SITE_URL", ""),
             **git_repo_info(path),
         }
     return {
         "path": str(path),
         "valid": True,
         "missing_files": missing_files(path),
+        "site_url": env.get("SITE_URL", ""),
         **git_repo_info(path),
     }
 
@@ -293,10 +295,10 @@ def create_missing_files(project_dir: Path) -> list[str]:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if rel == ".gitignore" and PROJECT_GITIGNORE_TEMPLATE.is_file():
             shutil.copy2(PROJECT_GITIGNORE_TEMPLATE, dest)
+        elif (template := scaffold_template_text(rel)) is not None:
+            dest.write_text(template, encoding="utf-8")
         elif (REPO_ROOT / rel).is_file():
             shutil.copy2(REPO_ROOT / rel, dest)
-        elif rel in INLINE_TEMPLATES:
-            dest.write_text(INLINE_TEMPLATES[rel], encoding="utf-8")
         else:
             dest.touch()
         created.append(rel)
@@ -382,14 +384,30 @@ def url_ok(url: str) -> bool:
         return False
 
 
+def _css_preview_revision(project_dir: Path, out: str, css_name: str) -> int | None:
+    path = project_dir / out / f"{css_name}.revision.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rev = data.get("revision")
+        return int(rev) if rev is not None else None
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
 def preview_urls(project_dir: Path) -> dict[str, str]:
     env = load_env(project_dir / ".env.local")
     css = env.get("CMS_LOCAL_PREVIEW_NAME", "cms-local-preview").strip() or "cms-local-preview"
     js = env.get("JS_LOCAL_PREVIEW_NAME", "js-local-preview").strip() or "js-local-preview"
     out = env.get("OUTPUT_DIR", "preview").strip() or "preview"
     tm = project_dir / "tampermonkey-loader.user.js"
+    css_rev = _css_preview_revision(project_dir, out, css)
+    stylus_url = f"http://127.0.0.1:{PREVIEW_PORT}/{out}/{css}.user.css"
+    if css_rev is not None:
+        stylus_url = f"{stylus_url}?rev={css_rev}"
     return {
-        "stylus": f"http://127.0.0.1:{PREVIEW_PORT}/{out}/{css}.user.css",
+        "stylus": stylus_url,
         "js_preview": f"http://127.0.0.1:{PREVIEW_PORT}/{out}/{js}.js",
         "site": env.get("SITE_URL", ""),
         "tampermonkey_loader": (

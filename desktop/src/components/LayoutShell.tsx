@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PreviewProvider, usePreviewContext } from "../hooks/PreviewContext";
 import QuickLinks from "./QuickLinks";
 import MainPanel from "./MainPanel";
+import HowToModal from "./HowToModal";
 import SetupPanel from "./SetupPanel";
 import Status from "./Status";
 import ThemeToggle from "./ThemeToggle";
@@ -9,11 +10,12 @@ import FontSizeControl from "./FontSizeControl";
 import TopNav from "./TopNav";
 import Watcher from "./Watcher";
 import SidebarCard from "./SidebarCard";
-import { SunMoon } from "lucide-react";
+import { SunMoon, LucideHeart, Heart } from "lucide-react";
 
 function LayoutShellInner() {
   const { project, error, saveProject, createProjectFiles } = usePreviewContext();
   const [setupOpen, setSetupOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
 
   return (
     <div className="theme-page relative min-h-screen overflow-hidden p-6">
@@ -31,13 +33,19 @@ function LayoutShellInner() {
       />
 
       <div className="theme-shell relative flex h-[calc(100vh-3rem)] max-h-[calc(100vh-3rem)] flex-col gap-4 overflow-hidden rounded-3xl p-6 backdrop-blur-xl">
-        <TopNav projectPath={project?.path} onSetupClick={() => setSetupOpen(true)} />
+        <TopNav
+          projectPath={project?.path}
+          onHowToClick={() => setHowToOpen(true)}
+          onSetupClick={() => setSetupOpen(true)}
+        />
 
         {error && (
-          <div role="alert" className="theme-alert text-sm">
+          <div role="alert" className="theme-alert text-base">
             <span>{error}</span>
           </div>
         )}
+
+        <HowToModal open={howToOpen} onClose={() => setHowToOpen(false)} />
 
         <SetupPanel
           open={setupOpen}
@@ -48,17 +56,24 @@ function LayoutShellInner() {
         />
 
         <div className="flex min-h-0 flex-1 gap-4">
-          <aside className="relative flex min-h-0 w-64 shrink-0 flex-col gap-4 pb-14">
-            <Watcher />
-            <Status />
-            <QuickLinks />
-            <SidebarCard title="Appearance" icon={SunMoon}>
-              <ThemeToggle variant="sidebar" />
-              <FontSizeControl />
-            </SidebarCard>
-            <p className="theme-text-muted absolute bottom-0 left-0 right-0 px-1 text-lg leading-tight">
-              Created by Cailee Averill
-            </p>
+          <aside className="flex min-h-0 w-64 shrink-0 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
+              <Watcher />
+              <Status />
+              <QuickLinks />
+              <SidebarCard title="Appearance" icon={SunMoon}>
+                <ThemeToggle variant="sidebar" />
+                <FontSizeControl />
+              </SidebarCard>
+            </div>
+            <div className="shrink-0 pt-3">
+              <div className="theme-divider mb-3" />
+              <p className="theme-text-muted text-sm px-1 leading-tight">Made with <Heart
+                  className="h-4 w-4 inline-block align-middle mr-1 text-red-600 fill-red-600"
+                  strokeWidth={2}
+                  aria-hidden
+                /> by Cailee Averill</p>
+            </div>
           </aside>
 
           <MainPanel />

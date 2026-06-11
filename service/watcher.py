@@ -37,6 +37,16 @@ class WatcherState:
                 if e.id > since_id
             ]
 
+    def log_cursor(self) -> int:
+        with self._lock:
+            return self._log_id
+
+    def clear_logs(self) -> int:
+        """Drop buffered log lines; return the current id cursor for since= polling."""
+        with self._lock:
+            self._logs.clear()
+            return self._log_id
+
     def _classify(self, line: str) -> str:
         lower = line.lower()
         if "error" in lower:
@@ -89,13 +99,15 @@ class WatcherState:
         assert self._proc.stdout and self._proc.stderr
         threading.Thread(target=self._reader, args=(self._proc.stdout, "info"), daemon=True).start()
         threading.Thread(target=self._reader, args=(self._proc.stderr, "err"), daemon=True).start()
-        threading.Thread(target=self._wait, daemon=True).start()
+        proc = self._proc
+        threading.Thread(target=self._wait, args=(proc,), daemon=True).start()
 
-    def _wait(self) -> None:
-        if not self._proc:
+    def _wait(self, proc: subprocess.Popen[str]) -> None:
+        code = proc.wait()
+        if self._proc is not proc:
             return
-        code = self._proc.wait()
         self.running = False
+        self._proc = None
         if code != 0:
             self.append_log("warn", f"Watcher exited (code {code})")
 
@@ -110,8 +122,11 @@ class WatcherState:
         self.running = False
 
     def restart(self) -> None:
-        if self.project_dir:
-            self.start(self.project_dir, self.mode)
+        if not self.project_dir:
+            return
+        mode = self.mode
+        self.append_log("cmd", f"Restarting watcher ({mode})…")
+        self.start(self.project_dir, mode)
 
 
 state = WatcherState()

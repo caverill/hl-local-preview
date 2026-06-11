@@ -1,7 +1,9 @@
 /**
- * CMS custom JavaScript — copy this file to production when ready.
+ * CMS custom JavaScript — edit here and upload to production when ready.
  *
- * DevTools tip: filter the console with MAIN_PREFIX to see only this script's logs.
+ * Local preview (Tampermonkey): install tampermonkey-loader.user.js from Quick Links.
+ * Filter DevTools with MAIN_PREFIX to see only this script's logs. If preview stops
+ * updating, restart the watcher.
  */
 
 const MAIN_PREFIX = "[hl-js-local-preview:main]";

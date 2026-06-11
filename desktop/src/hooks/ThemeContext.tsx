@@ -5,9 +5,9 @@ export type Theme = "light" | "dark";
 const STORAGE_KEY = "hl-preview-theme";
 const FONT_SIZE_STORAGE_KEY = "hl-preview-font-size";
 
-export const MIN_FONT_SIZE = 14;
-export const MAX_FONT_SIZE = 20;
-export const DEFAULT_FONT_SIZE = 16;
+export const MIN_FONT_SIZE = 16;
+export const MAX_FONT_SIZE = 22;
+export const DEFAULT_FONT_SIZE = 18;
 const FONT_SIZE_STEP = 1;
 
 export function applyTheme(theme: Theme) {

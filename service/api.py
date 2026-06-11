@@ -71,11 +71,15 @@ def put_setup():
     if not p.is_dir():
         return jsonify({"error": "not a directory"}), 400
 
+    site_url = str(data.get("site_url", "")).strip()
+    if not site_url:
+        return jsonify({"error": "SITE_URL is required"}), 400
+
     project.set_project_dir(p)
     d = project.get_project_dir()
     _, preview_ok, preview_error = project.apply_setup_env(
         d,
-        site_url=str(data.get("site_url", "")).strip(),
+        site_url=site_url,
         match_mode=str(data.get("match_mode", "url-prefix")).strip(),
         match_regexp_pattern=str(data.get("match_regexp_pattern", "")).strip(),
     )
@@ -173,7 +177,13 @@ def restart_watcher():
 @app.get("/api/logs")
 def logs():
     since = int(request.args.get("since", 0))
-    return jsonify({"entries": watcher.logs_since(since)})
+    return jsonify({"entries": watcher.logs_since(since), "cursor": watcher.log_cursor()})
+
+
+@app.post("/api/logs/clear")
+def clear_logs():
+    since = watcher.clear_logs()
+    return jsonify({"ok": True, "since": since})
 
 
 @app.get("/api/diagnostics")

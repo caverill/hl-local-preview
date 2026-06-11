@@ -27,7 +27,7 @@ export default function FontSizeControl() {
         >
           <Minus className="h-4 w-4" strokeWidth={2} aria-hidden />
         </button>
-        <span className="flex-1 text-center text-sm font-medium tabular-nums theme-text-body">
+        <span className="flex-1 text-center text-base font-medium tabular-nums theme-text-body">
           {fontSize}px
         </span>
         <button

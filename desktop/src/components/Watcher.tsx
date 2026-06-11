@@ -13,8 +13,10 @@ import {
   btnDangerBlock,
   btnDisabled,
   btnNeutralBlock,
+  btnRestartingBlock,
 } from "../lib/buttons";
 import { usePreviewContext } from "../hooks/PreviewContext";
+import { isSetupReady } from "../lib/setup";
 import SidebarCard from "./SidebarCard";
 
 type WatcherMode = "both" | "css" | "js";
@@ -42,19 +44,28 @@ type WatcherButtonProps = {
   icon: LucideIcon;
   className: string;
   inactive?: boolean;
+  spinning?: boolean;
   onClick?: () => void;
 };
 
-function WatcherButton({ label, icon: Icon, className, inactive = false, onClick }: WatcherButtonProps) {
+function WatcherButton({
+  label,
+  icon: Icon,
+  className,
+  inactive = false,
+  spinning = false,
+  onClick,
+}: WatcherButtonProps) {
   return (
     <button
       type="button"
       className={`${className} ${inactiveClass(inactive)}`}
       aria-disabled={inactive}
+      aria-busy={spinning}
       onClick={inactive ? undefined : onClick}
     >
       <Icon
-        className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 shrink-0 opacity-80"
+        className={`absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 shrink-0 opacity-80 ${spinning ? "animate-spin" : ""}`}
         strokeWidth={2}
         aria-hidden
       />
@@ -121,8 +132,18 @@ function ModeButton({
 }
 
 export default function Watcher() {
-  const { online, running, status, startWatcher, stopWatcher, restartWatcher, setError } =
-    usePreviewContext();
+  const {
+    online,
+    running,
+    status,
+    project,
+    startWatcher,
+    stopWatcher,
+    restartWatcher,
+    restarting,
+    setError,
+  } = usePreviewContext();
+  const setupReady = isSetupReady(project);
   const [busy, setBusy] = useState(false);
   const [pendingMode, setPendingMode] = useState<WatcherMode | null>(null);
 
@@ -147,8 +168,9 @@ export default function Watcher() {
     }
   }
 
-  const startDisabled = !online || running || busy;
-  const controlDisabled = !running || busy;
+  const startDisabled = !setupReady || !online || running || busy;
+  const controlDisabled = !setupReady || !running;
+  const stopDisabled = controlDisabled || busy;
 
   function startMode(mode: WatcherMode) {
     setPendingMode(mode);
@@ -156,7 +178,7 @@ export default function Watcher() {
   }
 
   return (
-    <SidebarCard title="Watcher" icon={Eye}>
+    <SidebarCard title="Watcher" icon={Eye} disabled={!setupReady}>
       <ModeButton
         mode="css"
         label="CSS Only"
@@ -186,17 +208,18 @@ export default function Watcher() {
       />
       <div className="theme-divider" />
       <WatcherButton
-        label="Restart"
+        label={restarting ? "Restarting…" : "Restart"}
         icon={RotateCw}
-        className={btnNeutralBlock}
-        inactive={controlDisabled}
+        className={restarting ? btnRestartingBlock : btnNeutralBlock}
+        inactive={controlDisabled || (busy && !restarting)}
+        spinning={restarting}
         onClick={() => run(restartWatcher)}
       />
       <WatcherButton
         label="Stop"
         icon={Square}
         className={btnDangerBlock}
-        inactive={controlDisabled}
+        inactive={stopDisabled}
         onClick={() => run(stopWatcher)}
       />
     </SidebarCard>
