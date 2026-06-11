@@ -22,7 +22,7 @@ export const HOW_TO_STEPS: HowToStep[] = [
     id: "setup",
     title: "Configure Setup",
     description:
-      "Open Setup from the top bar. Choose your project folder, enter your dev site URL (SITE_URL), pick a CSS match mode, and save. Create any missing project files if prompted.",
+      "Open Setup from the top bar. Choose your project folder, enter your dev site URL (SITE_URL), pick a CSS match mode, and save. Create any missing project files if prompted. After saving, open Diagnostics to install browser extensions and finish the ready check.",
     video: "/how-to/step-01.mp4",
     alt: "Configuring project folder and site URL in Setup",
   },
@@ -36,7 +36,7 @@ export const HOW_TO_STEPS: HowToStep[] = [
   },
   {
     id: "edit-css-js",
-    title: "Edit CSS and JS in your editor",
+    title: "Edit CSS and JS in your editor and see changes live",
     description:
       "Start the CSS and/or JS watcher from the sidebar — you can run one or both. Keep the Stylus install tab open with live reload for CSS. Edit main/styles.css or main/main.js, on save the watcher will rebuild the preview files.",
     videos: [
@@ -52,13 +52,5 @@ export const HOW_TO_STEPS: HowToStep[] = [
       },
     ],
     alt: "Starting the CSS and JS watchers",
-  },
-  {
-    id: "preview",
-    title: "Preview live on your dev site",
-    description:
-      "With extensions installed and the watcher running, open your dev site. Local CSS and JS previews inject automatically — edit files, save, and refresh to see changes.",
-    gif: "/how-to/05-preview.gif",
-    alt: "Seeing local CSS and JS changes on the dev site",
-  },
+  }
 ];

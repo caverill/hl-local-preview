@@ -8,7 +8,7 @@ import {
   Puzzle,
   type LucideIcon,
 } from "lucide-react";
-import type { EditorInfo } from "../lib/api";
+import { type EditorInfo } from "../lib/api";
 import { btnDisabled, btnNeutralBlockLeft } from "../lib/buttons";
 import { usePreviewContext } from "../hooks/PreviewContext";
 import SidebarCard from "./SidebarCard";

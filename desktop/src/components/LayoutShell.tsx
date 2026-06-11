@@ -1,21 +1,33 @@
 import { useState } from "react";
 import { PreviewProvider, usePreviewContext } from "../hooks/PreviewContext";
 import QuickLinks from "./QuickLinks";
-import MainPanel from "./MainPanel";
+import MainPanel, { type MainPanelTab } from "./MainPanel";
 import HowToModal from "./HowToModal";
 import SetupPanel from "./SetupPanel";
+import PreferencesPanel from "./PreferencesPanel";
 import Status from "./Status";
-import ThemeToggle from "./ThemeToggle";
-import FontSizeControl from "./FontSizeControl";
 import TopNav from "./TopNav";
 import Watcher from "./Watcher";
-import SidebarCard from "./SidebarCard";
-import { SunMoon, LucideHeart, Heart } from "lucide-react";
+import { LogFilterProvider } from "../hooks/LogFilterContext";
+import { Heart } from "lucide-react";
 
 function LayoutShellInner() {
-  const { project, error, saveProject, createProjectFiles } = usePreviewContext();
+  const {
+    project,
+    error,
+    running,
+    saveProject,
+    createProjectFiles,
+    syncProjectFiles,
+    switchProject,
+  } = usePreviewContext();
   const [setupOpen, setSetupOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [mainTab, setMainTab] = useState<MainPanelTab>("preview");
+
+  function handleSetupSaved() {
+    setMainTab("diagnostics");
+  }
 
   return (
     <div className="theme-page relative min-h-screen overflow-hidden p-6">
@@ -52,19 +64,20 @@ function LayoutShellInner() {
           project={project}
           onClose={() => setSetupOpen(false)}
           onSave={saveProject}
+          onSaved={handleSetupSaved}
           onCreateFiles={createProjectFiles}
+          onUpdateFiles={syncProjectFiles}
+          onSwitchProject={switchProject}
+          watcherRunning={running}
         />
 
         <div className="flex min-h-0 flex-1 gap-4">
-          <aside className="flex min-h-0 w-64 shrink-0 flex-col">
+          <aside className="flex min-h-0 w-80 shrink-0 flex-col">
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
               <Watcher />
               <Status />
               <QuickLinks />
-              <SidebarCard title="Appearance" icon={SunMoon}>
-                <ThemeToggle variant="sidebar" />
-                <FontSizeControl />
-              </SidebarCard>
+              <PreferencesPanel />
             </div>
             <div className="shrink-0 pt-3">
               <div className="theme-divider mb-3" />
@@ -76,7 +89,7 @@ function LayoutShellInner() {
             </div>
           </aside>
 
-          <MainPanel />
+          <MainPanel tab={mainTab} onTabChange={setMainTab} />
         </div>
       </div>
     </div>
@@ -86,7 +99,9 @@ function LayoutShellInner() {
 export default function LayoutShell() {
   return (
     <PreviewProvider>
-      <LayoutShellInner />
+      <LogFilterProvider>
+        <LayoutShellInner />
+      </LogFilterProvider>
     </PreviewProvider>
   );
 }

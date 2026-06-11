@@ -44,7 +44,7 @@ def tampermonkey_loader():
 
 @app.get("/api/status")
 def status():
-    d = project.get_project_dir()
+    d = project.active_project_dir()
     return jsonify({
         "watcher_running": watcher.running,
         "watcher_mode": watcher.mode if watcher.running else None,
@@ -52,13 +52,34 @@ def status():
         "preview_port_open": project.port_open(project.PREVIEW_PORT),
         "project_dir": str(d),
         "missing_files": project.missing_files(d),
+        **project.api_build_times(),
     })
 
 
 @app.get("/api/project")
 def get_project():
-    d = project.get_project_dir()
-    return jsonify(project.project_info(d))
+    d = project.active_project_dir()
+    info = project.project_info(d)
+    info.update(project.api_build_times())
+    return jsonify(info)
+
+
+@app.get("/api/preferences")
+def get_preferences():
+    return jsonify(project.get_preferences())
+
+
+@app.put("/api/preferences")
+def put_preferences():
+    data = request.get_json(force=True, silent=True) or {}
+    allowed = {}
+    if "auto_start_watcher" in data:
+        allowed["auto_start_watcher"] = data["auto_start_watcher"]
+    if "desktop_notifications" in data:
+        allowed["desktop_notifications"] = data["desktop_notifications"]
+    if "last_watcher_mode" in data:
+        allowed["last_watcher_mode"] = data["last_watcher_mode"]
+    return jsonify(project.update_preferences(**allowed))
 
 
 @app.put("/api/setup")
@@ -123,6 +144,25 @@ def put_config():
     return jsonify({"ok": True, "urls": project.preview_urls(d)})
 
 
+@app.post("/api/project/sync")
+def sync_project_files():
+    if watcher.running:
+        return jsonify({"error": "stop the watcher before updating project files"}), 409
+    data = request.get_json(force=True, silent=True) or {}
+    path = (data.get("path") or "").strip()
+    if path:
+        p = Path(path).expanduser().resolve()
+        if not p.is_dir():
+            return jsonify({"error": "not a directory"}), 400
+        project.set_project_dir(p)
+    d = project.get_project_dir()
+    files = data.get("files")
+    if files is not None and not isinstance(files, list):
+        return jsonify({"error": "files must be a list"}), 400
+    updated = project.sync_project_files(d, files if isinstance(files, list) else None)
+    return jsonify({"updated": updated, **project.project_info(d)})
+
+
 @app.post("/api/project/files")
 def create_files():
     data = request.get_json(force=True, silent=True) or {}
@@ -159,6 +199,7 @@ def start_watcher():
         watcher.start(d, mode)
     except FileNotFoundError as exc:
         return jsonify({"error": str(exc)}), 400
+    project.update_preferences(last_watcher_mode=mode)
     return jsonify({"running": True, "mode": watcher.mode})
 
 
@@ -172,6 +213,24 @@ def stop_watcher():
 def restart_watcher():
     watcher.restart()
     return jsonify({"running": watcher.running, "mode": watcher.mode})
+
+
+@app.post("/api/preview/rebuild")
+def rebuild_preview():
+    data = request.get_json(force=True, silent=True) or {}
+    mode = str(data.get("mode", "both")).lower()
+    d = project.get_project_dir()
+    missing = project.missing_files(d)
+    if missing:
+        return jsonify({"error": "missing required files", "missing": missing}), 400
+    if watcher.running:
+        return jsonify({"error": "stop the watcher before rebuilding"}), 409
+    preview_ok, preview_error = project.rebuild_preview_once(d, mode)
+    response = {"preview_built": preview_ok, **project.project_info(d)}
+    if not preview_ok:
+        response["preview_error"] = preview_error
+        return jsonify(response), 500
+    return jsonify(response)
 
 
 @app.get("/api/logs")

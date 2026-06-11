@@ -4,6 +4,7 @@ import subprocess
 import threading
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -19,15 +20,23 @@ class WatcherState:
     running: bool = False
     mode: str = "both"
     project_dir: Path | None = None
+    last_rebuild_at: str | None = None
     _proc: subprocess.Popen[str] | None = field(default=None, repr=False)
     _log_id: int = 0
     _logs: deque[LogEntry] = field(default_factory=lambda: deque(maxlen=500))
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+    def note_rebuild(self) -> None:
+        with self._lock:
+            self.last_rebuild_at = datetime.now(timezone.utc).isoformat()
+
     def append_log(self, level: str, message: str) -> None:
         with self._lock:
             self._log_id += 1
             self._logs.append(LogEntry(self._log_id, level, message))
+            lower = message.lower()
+            if level == "ok" and ("rebuilt" in lower or "updated" in lower):
+                self.last_rebuild_at = datetime.now(timezone.utc).isoformat()
 
     def logs_since(self, since_id: int = 0) -> list[dict]:
         with self._lock:

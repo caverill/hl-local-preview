@@ -18,7 +18,7 @@ export default function SidebarCard({
 }: Props) {
   return (
     <div
-      className={`glass-shell w-64 ${disabled ? "pointer-events-none opacity-45" : ""} ${className}`.trim()}
+      className={`glass-shell w-80 ${disabled ? "pointer-events-none opacity-45" : ""} ${className}`.trim()}
       aria-disabled={disabled || undefined}
     >
       <div className="flex flex-col gap-3 p-4">

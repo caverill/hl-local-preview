@@ -5,7 +5,7 @@ import {
   FolderSearch,
   GitBranch,
   Link2,
-  Puzzle,
+  RefreshCw,
   Save,
   Settings,
   Target,
@@ -13,12 +13,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type GitRepoInfo, type ProjectInfo } from "../lib/api";
-import {
-  detectBrowser,
-  extensionInstallUrl,
-  extensionStoreLabel,
-  type ExtensionId,
-} from "../lib/extensionStores";
 import {
   btnAccentMd,
   btnClose,
@@ -28,6 +22,7 @@ import {
   btnNeutralXs,
   btnPrimaryMd,
 } from "../lib/buttons";
+import { formatRecentDir } from "../lib/logFilters";
 import { DEFAULT_SITE_URL, MATCH_MODE_OPTIONS, type MatchMode, type SetupValues } from "../lib/setup";
 
 const setupIcon = "setup-icon shrink-0";
@@ -37,37 +32,26 @@ type Props = {
   project: ProjectInfo | null;
   onClose: () => void;
   onSave: (values: SetupValues) => Promise<void>;
+  onSaved?: () => void;
   onCreateFiles: (path: string) => Promise<
     ProjectInfo & { created: string[]; preview_built?: boolean; preview_error?: string }
   >;
+  onUpdateFiles: (path: string) => Promise<ProjectInfo & { updated: string[] }>;
+  onSwitchProject?: (path: string) => Promise<void>;
+  watcherRunning?: boolean;
 };
 
-function ExtensionInstallLink({
-  extension,
-  label,
-  browser,
-}: {
-  extension: ExtensionId;
-  label: string;
-  browser: ReturnType<typeof detectBrowser>;
-}) {
-  const url = extensionInstallUrl(extension, browser);
-  const store = extensionStoreLabel(browser);
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={`Install ${label} (${store})`}
-      className={`${btnNeutralMd} flex flex-1`}
-    >
-      {label}
-    </a>
-  );
-}
-
-export default function SetupPanel({ open, project, onClose, onSave, onCreateFiles }: Props) {
+export default function SetupPanel({
+  open,
+  project,
+  onClose,
+  onSave,
+  onSaved,
+  onCreateFiles,
+  onUpdateFiles,
+  onSwitchProject,
+  watcherRunning = false,
+}: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [path, setPath] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
@@ -78,6 +62,8 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [outdatedFiles, setOutdatedFiles] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [pathError, setPathError] = useState(false);
   const [missingFilesError, setMissingFilesError] = useState(false);
@@ -99,6 +85,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     setMatchMode(project.match_mode ?? "url-prefix");
     setMatchRegexpPattern(project.match_regexp_pattern ?? "");
     setMissingFiles(project.missing_files);
+    setOutdatedFiles(project.outdated_files ?? []);
     setGitInfo({
       is_git_repo: project.is_git_repo,
       repo_root: project.repo_root,
@@ -142,6 +129,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
           if (requestId !== inspectRequestIdRef.current) return;
           if (pathRef.current.trim() !== inspectedPath) return;
           if (result.valid) setMissingFiles(result.missing_files);
+          setOutdatedFiles(result.outdated_files ?? []);
           setSiteUrl(result.site_url ?? "");
           setGitInfo({
             is_git_repo: result.is_git_repo,
@@ -167,6 +155,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
   function applyInspect(result: {
     path: string;
     missing_files: string[];
+    outdated_files?: string[];
     site_url?: string;
     is_git_repo: boolean;
     repo_root: string | null;
@@ -178,6 +167,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     setPath(result.path);
     setPathError(false);
     setMissingFiles(result.missing_files);
+    setOutdatedFiles(result.outdated_files ?? []);
     setSiteUrl(result.site_url ?? "");
     setGitInfo({
       is_git_repo: result.is_git_repo,
@@ -186,6 +176,22 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
       remote_web_url: result.remote_web_url,
       branch: result.branch,
     });
+  }
+
+  async function handleRecentFolder(dir: string) {
+    setError("");
+    setPath(dir);
+    setPathError(false);
+    if (onSwitchProject) {
+      setBusy(true);
+      try {
+        await onSwitchProject(dir);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not switch project folder");
+      } finally {
+        setBusy(false);
+      }
+    }
   }
 
   async function handlePickFolder() {
@@ -198,6 +204,24 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
       setError(e instanceof Error ? e.message : "Could not open folder picker");
     } finally {
       setPicking(false);
+    }
+  }
+
+  async function handleUpdateFiles() {
+    if (!path.trim()) {
+      setPathError(true);
+      return;
+    }
+    setUpdating(true);
+    setError("");
+    try {
+      const result = await onUpdateFiles(path);
+      setOutdatedFiles(result.outdated_files ?? []);
+      setMissingFiles(result.missing_files);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update project files");
+    } finally {
+      setUpdating(false);
     }
   }
 
@@ -258,6 +282,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     setBusy(true);
     try {
       await onSave({ path, siteUrl, matchMode, matchRegexpPattern });
+      onSaved?.();
       dialogRef.current?.close();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -266,9 +291,8 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
     }
   }
 
-  const disabled = busy || picking || creating;
-  const browser = detectBrowser();
-  const storeLabel = extensionStoreLabel(browser);
+  const disabled = busy || picking || creating || updating;
+  const recentDirs = (project?.recent_dirs ?? []).filter((dir) => dir && dir !== path.trim());
 
   return (
     <dialog ref={dialogRef} className="setup-modal modal">
@@ -289,35 +313,17 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
             <Settings className={`${setupIcon} h-5 w-5`} strokeWidth={2} aria-hidden />
             Setup
           </h3>
-          <p className="theme-text-soft text-base mb-4">
+          <p className="theme-text-soft text-base">
             Project folder, dev site URL, and Stylus match mode for CSS preview.
           </p>
         </div>
 
         {error && (
-          <div
-            role="alert"
-            className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-base text-red-300"
-          >
+          <div role="alert" className="theme-callout-error">
             {error}
           </div>
         )}
 
-        <fieldset>
-          <legend className="section-title mb-2 flex items-center gap-1.5">
-            <Puzzle className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
-            Browser extensions
-          </legend>
-          <p className="theme-text-muted mb-2 text-base">
-            Install once — links open {storeLabel} for your browser.
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <ExtensionInstallLink extension="stylus" label="Stylus" browser={browser} />
-            <ExtensionInstallLink extension="tampermonkey" label="Tampermonkey" browser={browser} />
-          </div>
-        </fieldset>
-
-        <div className="theme-divider" />
         <fieldset>
           <legend className="section-title mb-2 flex items-center gap-1.5">
             <FolderOpen className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
@@ -354,6 +360,25 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
             <p className="setup-field-error" role="alert">
               Choose a project folder before saving.
             </p>
+          ) : null}
+          {recentDirs.length > 0 ? (
+            <div className="mt-2 flex flex-col gap-1.5">
+              <span className="theme-text-faint text-[11px] uppercase tracking-[0.12em]">Recent</span>
+              <div className="flex flex-wrap gap-1.5">
+                {recentDirs.map((dir) => (
+                  <button
+                    key={dir}
+                    type="button"
+                    className={`${btnNeutralXs} max-w-full truncate`}
+                    title={dir}
+                    disabled={disabled}
+                    onClick={() => void handleRecentFolder(dir)}
+                  >
+                    {formatRecentDir(dir)}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
         </fieldset>
         {gitInfo?.is_git_repo && (
@@ -408,6 +433,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
         {path.trim() && gitInfo && !gitInfo.is_git_repo ? (
           <p className="theme-text-faint text-base">No Git repository found in this folder or its parents.</p>
         ) : null}
+        
 
         {missingFiles.length > 0 && (
           <div
@@ -438,7 +464,44 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
             ) : null}
           </div>
         )}
+
+        {missingFiles.length === 0 && outdatedFiles.length > 0 && (
+          <div className="theme-callout-warn rounded-xl border p-4">
+            <p className="text-base font-medium">
+              {outdatedFiles.length} toolkit file{outdatedFiles.length === 1 ? "" : "s"} behind this
+              app
+            </p>
+            <p className="theme-text-soft mt-1 text-[11px] leading-snug">
+              Updates scripts and templates from HL Local Preview. Does not change{" "}
+              <span className="font-mono">main/styles.css</span>,{" "}
+              <span className="font-mono">main/main.js</span>, or{" "}
+              <span className="font-mono">.env.local</span>.
+            </p>
+            <ul className="theme-text-muted mt-2 space-y-1 font-mono text-[11px]">
+              {outdatedFiles.map((file) => (
+                <li key={file}>{file}</li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className={`${btnNeutralMd} mt-3 ${disabled || watcherRunning ? btnDisabled : ""}`}
+              aria-disabled={disabled || watcherRunning}
+              onClick={disabled || watcherRunning ? undefined : handleUpdateFiles}
+            >
+              <RefreshCw
+                className={`${setupIcon} h-4 w-4 ${updating ? "animate-spin" : ""}`}
+                strokeWidth={2}
+                aria-hidden
+              />
+              {updating ? "Updating…" : "Update project files"}
+            </button>
+            {watcherRunning ? (
+              <p className="theme-text-faint mt-2 text-[11px]">Stop the watcher before updating.</p>
+            ) : null}
+          </div>
+        )}
         <div className="theme-divider" />
+        
         <fieldset>
           <legend className="section-title mb-2 flex items-center gap-1.5">
             <Link2 className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
@@ -504,7 +567,13 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
         </fieldset>
 
         <div className="theme-divider" />
-
+        <p className="theme-callout-info flex items-start gap-2 text-base leading-relaxed">
+          <Target className={`${setupIcon} mt-0.5 h-4 w-4 shrink-0`} strokeWidth={2} aria-hidden />
+          <span>
+            After you save, open <span className="theme-text font-medium">Diagnostics</span> to install
+            browser extensions and finish the ready check.
+          </span>
+        </p>
         <div className="modal-action gap-2">
           <form method="dialog">
             <button
@@ -533,5 +602,7 @@ export default function SetupPanel({ open, project, onClose, onSave, onCreateFil
         </button>
       </form>
     </dialog>
+    
   );
+  
 }

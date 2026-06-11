@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type EditorInfo, type LogEntry, type ProjectInfo, type Status } from "../lib/api";
+import {
+  api,
+  type AppPreferences,
+  type EditorInfo,
+  type LogEntry,
+  type ProjectInfo,
+  type Status,
+  type WatcherMode,
+} from "../lib/api";
+import { notifyDesktop } from "../lib/notifications";
 import type { SetupValues } from "../lib/setup";
+import { isSetupReady } from "../lib/setup";
 
 const LOG_SINCE_STORAGE_KEY = "hl-preview-log-since";
 
@@ -22,6 +32,7 @@ function clearStoredLogSince() {
 export function usePreview(pollMs = 1200) {
   const [status, setStatus] = useState<Status | null>(null);
   const [project, setProject] = useState<ProjectInfo | null>(null);
+  const [preferences, setPreferences] = useState<AppPreferences | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [editors, setEditors] = useState<EditorInfo[]>([]);
   const [online, setOnline] = useState(false);
@@ -29,6 +40,10 @@ export function usePreview(pollMs = 1200) {
   const [restarting, setRestarting] = useState(false);
   const logSince = useRef(readStoredLogSince());
   const logPullGen = useRef(0);
+  const autoStartAttempted = useRef(false);
+  const prevPortOpen = useRef<boolean | null>(null);
+  const prevWatcherRunning = useRef<boolean | null>(null);
+  const notifiedLogIds = useRef<Set<number>>(new Set());
 
   const refreshEditors = useCallback(async () => {
     try {
@@ -73,9 +88,10 @@ export function usePreview(pollMs = 1200) {
       await api.health();
       setOnline(true);
       setError("");
-      const [s, p] = await Promise.all([api.status(), api.project()]);
+      const [s, p, prefs] = await Promise.all([api.status(), api.project(), api.preferences()]);
       setStatus(s);
       setProject(p);
+      setPreferences(prefs);
       await pullLogs();
     } catch {
       setOnline(false);
@@ -105,7 +121,7 @@ export function usePreview(pollMs = 1200) {
 
   const clearLogs = useCallback(async () => {
     logPullGen.current += 1;
-    const lastIdBeforeClear = logs.at(-1)?.id ?? logSince.current;
+    const lastIdBeforeClear = logs.length ? logs[logs.length - 1]!.id : logSince.current;
     setLogs([]);
 
     try {
@@ -119,7 +135,7 @@ export function usePreview(pollMs = 1200) {
   }, [logs]);
 
   const startWatcher = useCallback(
-    async (mode: "both" | "css" | "js") => {
+    async (mode: WatcherMode) => {
       setError("");
       await api.startWatcher(mode);
       await refresh();
@@ -138,7 +154,6 @@ export function usePreview(pollMs = 1200) {
     try {
       await api.restartWatcher();
       await refresh();
-      // Subprocess output can land slightly after the API returns.
       await pullLogs();
       window.setTimeout(() => {
         void pullLogs();
@@ -148,6 +163,44 @@ export function usePreview(pollMs = 1200) {
       throw e;
     }
   }, [refresh, pullLogs]);
+
+  const rebuildPreview = useCallback(
+    async (mode: WatcherMode = "both") => {
+      setError("");
+      try {
+        const result = await api.rebuildPreview(mode);
+        await refresh();
+        if (result.preview_built === false && result.preview_error) {
+          const message = `Preview rebuild failed: ${result.preview_error}`;
+          setError(message);
+          notifyDesktop("Preview rebuild failed", result.preview_error, preferences);
+          throw new Error(message);
+        }
+        return result;
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith("Preview rebuild failed")) throw e;
+        const message = e instanceof Error ? e.message : "Preview rebuild failed";
+        notifyDesktop("Preview rebuild failed", message, preferences);
+        throw e;
+      }
+    },
+    [refresh, preferences],
+  );
+
+  const savePreferences = useCallback(async (patch: Partial<AppPreferences>) => {
+    const next = await api.savePreferences(patch);
+    setPreferences(next);
+    return next;
+  }, []);
+
+  const switchProject = useCallback(
+    async (path: string) => {
+      setError("");
+      await api.setProject(path);
+      await refresh();
+    },
+    [refresh],
+  );
 
   const saveProject = useCallback(
     async (values: SetupValues) => {
@@ -173,6 +226,16 @@ export function usePreview(pollMs = 1200) {
     [refresh],
   );
 
+  const syncProjectFiles = useCallback(
+    async (path: string) => {
+      setError("");
+      const result = await api.syncProjectFiles(path);
+      await refresh();
+      return result;
+    },
+    [refresh],
+  );
+
   const openUrl = useCallback((url: string) => {
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
@@ -186,9 +249,62 @@ export function usePreview(pollMs = 1200) {
     [],
   );
 
+  useEffect(() => {
+    if (autoStartAttempted.current) return;
+    if (!online || !preferences?.auto_start_watcher) return;
+    if (!isSetupReady(project)) return;
+    if (status?.watcher_running) return;
+
+    autoStartAttempted.current = true;
+    const mode = preferences.last_watcher_mode;
+    void startWatcher(mode).catch((e) => {
+      setError(e instanceof Error ? e.message : "Could not auto-start watcher");
+    });
+  }, [online, preferences, project, status?.watcher_running, startWatcher]);
+
+  useEffect(() => {
+    if (!preferences?.desktop_notifications) return;
+
+    const portOpen = status?.preview_port_open ?? false;
+    const watcherRunning = status?.watcher_running ?? false;
+
+    if (prevPortOpen.current === true && !portOpen && watcherRunning) {
+      notifyDesktop(
+        "Preview port closed",
+        `Port ${status?.preview_port ?? 5500} is no longer responding.`,
+        preferences,
+      );
+    }
+
+    if (prevWatcherRunning.current === true && !watcherRunning) {
+      notifyDesktop("Watcher stopped", "The file watcher is no longer running.", preferences);
+    }
+
+    prevPortOpen.current = portOpen;
+    prevWatcherRunning.current = watcherRunning;
+  }, [status, preferences]);
+
+  useEffect(() => {
+    if (!preferences?.desktop_notifications) return;
+
+    for (const entry of logs) {
+      if (notifiedLogIds.current.has(entry.id)) continue;
+      if (entry.level === "err") {
+        notifyDesktop("Watcher error", entry.message, preferences);
+        notifiedLogIds.current.add(entry.id);
+        continue;
+      }
+      if (entry.level === "warn" && entry.message.toLowerCase().includes("watcher exited")) {
+        notifyDesktop("Watcher error", entry.message, preferences);
+        notifiedLogIds.current.add(entry.id);
+      }
+    }
+  }, [logs, preferences]);
+
   return {
     status,
     project,
+    preferences,
     logs,
     editors,
     online,
@@ -199,9 +315,13 @@ export function usePreview(pollMs = 1200) {
     startWatcher,
     stopWatcher,
     restartWatcher,
+    rebuildPreview,
+    savePreferences,
+    switchProject,
     restarting,
     saveProject,
     createProjectFiles,
+    syncProjectFiles,
     openUrl,
     openInEditor,
     running: status?.watcher_running ?? false,

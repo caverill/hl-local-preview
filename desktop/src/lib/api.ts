@@ -15,6 +15,9 @@ export type Status = {
   preview_port_open: boolean;
   project_dir: string;
   missing_files: string[];
+  last_rebuild_at: string | null;
+  css_built_at: string | null;
+  js_built_at: string | null;
 };
 
 export type GitRepoInfo = {
@@ -25,12 +28,26 @@ export type GitRepoInfo = {
   branch: string | null;
 };
 
+export type WatcherMode = "both" | "css" | "js";
+
+export type AppPreferences = {
+  recent_dirs: string[];
+  auto_start_watcher: boolean;
+  last_watcher_mode: WatcherMode;
+  desktop_notifications: boolean;
+};
+
 export type ProjectInfo = {
   path: string;
   site_url: string;
   match_mode: "domain" | "url-prefix" | "url" | "regexp";
   match_regexp_pattern: string;
   missing_files: string[];
+  outdated_files: string[];
+  recent_dirs: string[];
+  last_rebuild_at: string | null;
+  css_built_at: string | null;
+  js_built_at: string | null;
   urls: {
     stylus: string;
     js_preview: string;
@@ -43,6 +60,7 @@ export type ProjectInspect = {
   path: string;
   valid: boolean;
   missing_files: string[];
+  outdated_files?: string[];
   site_url: string;
 } & GitRepoInfo;
 
@@ -87,10 +105,26 @@ export const api = {
         body: JSON.stringify({ path: path ?? "" }),
       },
     ),
+  syncProjectFiles: (path?: string) =>
+    request<ProjectInfo & { updated: string[] }>("/api/project/sync", {
+      method: "POST",
+      body: JSON.stringify({ path: path ?? "" }),
+    }),
   startWatcher: (mode: string) =>
     request("/api/watcher/start", { method: "POST", body: JSON.stringify({ mode }) }),
   stopWatcher: () => request("/api/watcher/stop", { method: "POST", body: "{}" }),
   restartWatcher: () => request("/api/watcher/restart", { method: "POST", body: "{}" }),
+  rebuildPreview: (mode: WatcherMode = "both") =>
+    request<ProjectInfo & { preview_built?: boolean; preview_error?: string }>("/api/preview/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    }),
+  preferences: () => request<AppPreferences>("/api/preferences"),
+  savePreferences: (payload: Partial<AppPreferences>) =>
+    request<AppPreferences>("/api/preferences", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   logs: (since = 0) => request<{ entries: LogEntry[]; cursor: number }>(`/api/logs?since=${since}`),
   clearLogs: () => request<{ ok: boolean; since: number }>("/api/logs/clear", { method: "POST", body: "{}" }),
   diagnostics: () => request<{ checks: Check[] }>("/api/diagnostics"),

@@ -1,5 +1,6 @@
 import {
   Eye,
+  Hammer,
   Layers,
   Palette,
   RotateCw,
@@ -45,6 +46,7 @@ type WatcherButtonProps = {
   className: string;
   inactive?: boolean;
   spinning?: boolean;
+  title?: string;
   onClick?: () => void;
 };
 
@@ -54,6 +56,7 @@ function WatcherButton({
   className,
   inactive = false,
   spinning = false,
+  title,
   onClick,
 }: WatcherButtonProps) {
   return (
@@ -62,6 +65,7 @@ function WatcherButton({
       className={`${className} ${inactiveClass(inactive)}`}
       aria-disabled={inactive}
       aria-busy={spinning}
+      title={title}
       onClick={inactive ? undefined : onClick}
     >
       <Icon
@@ -137,9 +141,11 @@ export default function Watcher() {
     running,
     status,
     project,
+    preferences,
     startWatcher,
     stopWatcher,
     restartWatcher,
+    rebuildPreview,
     restarting,
     setError,
   } = usePreviewContext();
@@ -171,6 +177,7 @@ export default function Watcher() {
   const startDisabled = !setupReady || !online || running || busy;
   const controlDisabled = !setupReady || !running;
   const stopDisabled = controlDisabled || busy;
+  const rebuildDisabled = !setupReady || !online || running || busy;
 
   function startMode(mode: WatcherMode) {
     setPendingMode(mode);
@@ -205,6 +212,22 @@ export default function Watcher() {
         startDisabled={startDisabled}
         pendingMode={pendingMode}
         onClick={() => startMode("both")}
+      />
+      <WatcherButton
+        label="Rebuild once"
+        icon={Hammer}
+        className={btnNeutralBlock}
+        inactive={rebuildDisabled}
+        title={
+          running
+            ? "Stop the watcher before rebuilding preview files"
+            : "Sync preview/ once from main/styles.css and main/main.js without starting the watcher"
+        }
+        onClick={() =>
+          run(async () => {
+            await rebuildPreview(activeMode ?? preferences?.last_watcher_mode ?? "both");
+          })
+        }
       />
       <div className="theme-divider" />
       <WatcherButton
