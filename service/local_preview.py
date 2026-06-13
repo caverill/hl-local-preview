@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,19 +22,10 @@ def _ensure_scripts_importable() -> None:
 
 
 def _kill_port_listeners(port: int) -> None:
-    try:
-        result = subprocess.run(
-            ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except OSError:
-        return
+    _ensure_scripts_importable()
+    from preview_server import kill_port_listeners
 
-    for pid in result.stdout.strip().split():
-        if pid.isdigit():
-            subprocess.run(["kill", pid], check=False)
+    kill_port_listeners(port)
 
 
 def _remote_preview_root(port: int = PREVIEW_PORT) -> str | None:

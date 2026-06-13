@@ -12,6 +12,14 @@ import webbrowser
 import os
 from pathlib import Path
 
+
+def _configure_stdout() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
 ROOT = Path(__file__).resolve().parent.parent
 UI = ROOT / "desktop"
 SERVICE_PORT = 17890
@@ -54,6 +62,7 @@ def port_open(port: int) -> bool:
 
 
 def main() -> int:
+    _configure_stdout()
     print("HL Local Preview — web UI\n")
 
     if sys.version_info < (3, 10):
@@ -108,11 +117,11 @@ def main() -> int:
 
     if not (UI / "node_modules").is_dir():
         print("  … npm install")
-        subprocess.run(["npm", "install"], cwd=str(UI), check=True)
+        subprocess.run([npm, "install"], cwd=str(UI), check=True)
 
     if not port_open(UI_PORT):
         procs.append(subprocess.Popen(
-            ["npm", "run", "dev"],
+            [npm, "run", "dev"],
             cwd=str(UI),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -123,7 +132,10 @@ def main() -> int:
             time.sleep(0.1)
         if not port_open(UI_PORT):
             print(f"  ✗ Vite failed on port {UI_PORT}")
-            print(f"    lsof -iTCP:{UI_PORT} -sTCP:LISTEN -t | xargs kill")
+            if sys.platform == "win32":
+                print(f"    netstat -ano | findstr :{UI_PORT}")
+            else:
+                print(f"    lsof -iTCP:{UI_PORT} -sTCP:LISTEN -t | xargs kill")
             stop()
     print(f"  ✓ UI {UI_URL}\n")
     print("Press Ctrl+C to stop.\n")
