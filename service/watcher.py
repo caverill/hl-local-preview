@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 from collections import deque
 from dataclasses import dataclass, field
@@ -83,7 +84,7 @@ class WatcherState:
 
         env_path = project_dir / ".env.local"
         args = [
-            "python3",
+            sys.executable,
             "-u",
             str(script),
             mode,
@@ -91,7 +92,7 @@ class WatcherState:
             "--env",
             str(env_path),
         ]
-        self.append_log("cmd", f"python3 -u scripts/watch.py {mode} --no-open")
+        self.append_log("cmd", f"{sys.executable} -u scripts/watch.py {mode} --no-open")
 
         self._proc = subprocess.Popen(
             args,
