@@ -25,7 +25,6 @@
     --surface-inner: 28 25 23 / 0.3;
     --tab-bar: 28 25 23 / 0.5;
     --glass-border: 255 255 255 / 0.1;
-    --glass-shadow: 0 0 0 / 0.24;
     --hover-bg: 255 255 255 / 0.1;
     --hover-border: 255 255 255 / 0.3;
     --ghost-border: 255 255 255 / 0.15;
@@ -109,7 +108,6 @@
     --surface-inner: 248 250 252 / 0.85;
     --tab-bar: 226 232 240 / 0.85;
     --glass-border: 15 23 42 / 0.08;
-    --glass-shadow: 15 23 42 / 0.08;
     --hover-bg: 15 23 42 / 0.05;
     --hover-border: 15 23 42 / 0.15;
     --ghost-border: 15 23 42 / 0.12;
@@ -196,7 +194,6 @@
     border: 1px solid rgb(var(--shell-edge));
     background: linear-gradient(to bottom right, rgb(var(--shell-from)), rgb(var(--shell-to)));
     color: rgb(var(--text));
-    box-shadow: 0 8px 32px rgb(var(--glass-shadow));
   }
 
   .theme-orb-lime {
@@ -361,7 +358,6 @@
     @apply rounded-2xl backdrop-blur-sm;
     border: 1px solid rgb(var(--glass-border));
     background-color: rgb(var(--surface));
-    box-shadow: 0 8px 32px rgb(var(--glass-shadow));
   }
 
   .glass-inner {
@@ -553,7 +549,7 @@
   }
 
   .preview-card-editor-menu {
-    @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1 shadow-lg;
+    @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1;
     border-color: rgb(var(--glass-border));
     background-color: rgb(var(--surface-btn));
     color: rgb(var(--text));
@@ -683,7 +679,6 @@
     border: 1px solid rgb(var(--glass-border));
     background: linear-gradient(to bottom right, rgb(var(--modal-from)), rgb(var(--modal-to))) !important;
     color: rgb(var(--text));
-    box-shadow: 0 8px 32px rgb(var(--glass-shadow));
   }
 
   .setup-input {
@@ -1044,7 +1039,7 @@
   }
 
   .project-switcher-menu {
-    @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1 shadow-lg;
+    @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1;
     border-color: rgb(var(--glass-border));
     background-color: rgb(var(--surface-btn));
     color: rgb(var(--text));
@@ -1071,10 +1066,6 @@
 }
 
 @layer utilities {
-  .shadow-glass {
-    box-shadow: 0 8px 32px rgb(var(--glass-shadow));
-  }
-
   .animate-indicator-flash {
     animation: indicator-flash 1.2s ease-in-out infinite;
   }
