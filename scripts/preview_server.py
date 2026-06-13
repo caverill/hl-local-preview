@@ -6,6 +6,8 @@ import http.server
 import json
 import socket
 import socketserver
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -64,6 +66,43 @@ class ThreadedPreviewServer(socketserver.ThreadingMixIn, socketserver.TCPServer)
     daemon_threads = True
 
 
+def kill_port_listeners(port: int) -> None:
+    """Stop processes listening on port (Unix: lsof/kill; Windows: netstat/taskkill)."""
+    if sys.platform == "win32":
+        result = subprocess.run(
+            ["netstat", "-ano", "-p", "tcp"],
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        for line in result.stdout.splitlines():
+            if "LISTENING" not in line.upper():
+                continue
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            local_addr, pid = parts[1], parts[-1]
+            if local_addr.rsplit(":", 1)[-1] != str(port) or not pid.isdigit():
+                continue
+            subprocess.run(
+                ["taskkill", "/F", "/PID", pid],
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        return
+
+    result = subprocess.run(
+        ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for pid in result.stdout.strip().split():
+        if pid.isdigit():
+            subprocess.run(["kill", pid], check=False)
+
+
 def port_is_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
@@ -106,21 +145,15 @@ def start_preview_server() -> None:
                 _httpd.server_close()
                 _httpd = None
             else:
-                import subprocess
-
-                result = subprocess.run(
-                    ["lsof", f"-iTCP:{PREVIEW_PORT}", "-sTCP:LISTEN", "-t"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                for pid in result.stdout.strip().split():
-                    if pid.isdigit():
-                        subprocess.run(["kill", pid], check=False)
+                kill_port_listeners(PREVIEW_PORT)
                 time.sleep(0.2)
         raise RuntimeError(
             f"Port {PREVIEW_PORT} is in use but not responding. "
-            f"Stop the old process: lsof -iTCP:{PREVIEW_PORT} -sTCP:LISTEN -t | xargs kill"
+            + (
+                f"Stop the old process: netstat -ano | findstr :{PREVIEW_PORT}"
+                if sys.platform == "win32"
+                else f"Stop the old process: lsof -iTCP:{PREVIEW_PORT} -sTCP:LISTEN -t | xargs kill"
+            )
         )
 
     _httpd = ThreadedPreviewServer(("127.0.0.1", PREVIEW_PORT), PreviewHandler)
