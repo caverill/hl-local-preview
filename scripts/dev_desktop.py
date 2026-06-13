@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import webbrowser
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +17,25 @@ UI = ROOT / "desktop"
 SERVICE_PORT = 17890
 UI_PORT = 1420
 UI_URL = f"http://localhost:{UI_PORT}"
+
+
+def _ensure_supported_python() -> bool:
+    if sys.platform != "win32":
+        return True
+    lower = sys.executable.lower()
+    if "msys" in lower or "windowsapps" in lower:
+        print("On Windows, start the app with the official Python install:")
+        print("  python scripts/dev_desktop.py")
+        print(f"Do not use python3 ({sys.executable})")
+        return False
+    return True
+
+
+def _kill_port_listeners(port: int) -> None:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from preview_server import kill_port_listeners
+
+    kill_port_listeners(port)
 
 
 def port_open(port: int) -> bool:
@@ -39,14 +59,19 @@ def main() -> int:
     if sys.version_info < (3, 10):
         print("Need Python 3.10+")
         return 1
-    if not shutil.which("npm"):
+    if not _ensure_supported_python():
+        return 1
+    npm = shutil.which("npm")
+    if not npm:
         print("Need Node.js — https://nodejs.org")
         return 1
 
     try:
         import flask  # noqa: F401
+        import watchdog  # noqa: F401
     except ImportError:
         print("Run: pip install -r requirements.txt")
+        print(f"Use the same Python as this app: {sys.executable}")
         return 1
 
     procs: list[subprocess.Popen] = []
@@ -60,18 +85,26 @@ def main() -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
 
-    if not port_open(SERVICE_PORT):
-        procs.append(subprocess.Popen(
-            [sys.executable, "-m", "service.api"],
-            cwd=str(ROOT),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ))
-        for _ in range(50):
-            if port_open(SERVICE_PORT):
-                break
-            time.sleep(0.1)
+    if port_open(SERVICE_PORT):
+        _kill_port_listeners(SERVICE_PORT)
+        time.sleep(0.3)
+    procs.append(subprocess.Popen(
+        [sys.executable, "-m", "service.api"],
+        cwd=str(ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1",
+        },
+    ))
+    for _ in range(50):
+        if port_open(SERVICE_PORT):
+            break
+        time.sleep(0.1)
     print(f"  ✓ API http://127.0.0.1:{SERVICE_PORT}")
+    print(f"    Python: {sys.executable}")
 
     if not (UI / "node_modules").is_dir():
         print("  … npm install")

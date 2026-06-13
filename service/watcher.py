@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from service import project
+
+
+def _sanitize_log_line(line: str) -> str:
+    return project.sanitize_log_text(line)
 
 
 @dataclass
@@ -31,6 +39,7 @@ class WatcherState:
             self.last_rebuild_at = datetime.now(timezone.utc).isoformat()
 
     def append_log(self, level: str, message: str) -> None:
+        message = _sanitize_log_line(message)
         with self._lock:
             self._log_id += 1
             self._logs.append(LogEntry(self._log_id, level, message))
@@ -77,13 +86,22 @@ class WatcherState:
 
     def start(self, project_dir: Path, mode: str = "both") -> None:
         self.stop()
+        if not project.has_site_url(project_dir):
+            raise ValueError(project.SITE_URL_REQUIRED_MSG)
+        missing_deps = project.missing_python_deps()
+        if missing_deps:
+            raise ValueError(project.PYTHON_DEPS_REQUIRED_MSG)
+        updated_scripts = project.ensure_watcher_scripts(project_dir)
+        if updated_scripts:
+            self.append_log("info", f"Updated watcher scripts: {', '.join(updated_scripts)}")
         script = project_dir / "scripts" / "watch.py"
         if not script.is_file():
             raise FileNotFoundError(f"Missing {script}")
 
         env_path = project_dir / ".env.local"
+        py = project.python_executable()
         args = [
-            "python3",
+            py,
             "-u",
             str(script),
             mode,
@@ -91,7 +109,7 @@ class WatcherState:
             "--env",
             str(env_path),
         ]
-        self.append_log("cmd", f"python3 -u scripts/watch.py {mode} --no-open")
+        self.append_log("cmd", f"{py} -u scripts/watch.py {mode} --no-open")
 
         self._proc = subprocess.Popen(
             args,
@@ -99,6 +117,9 @@ class WatcherState:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=project._subprocess_env(),
             bufsize=1,
         )
         self.running = True
@@ -110,6 +131,18 @@ class WatcherState:
         threading.Thread(target=self._reader, args=(self._proc.stderr, "err"), daemon=True).start()
         proc = self._proc
         threading.Thread(target=self._wait, args=(proc,), daemon=True).start()
+
+        for _ in range(20):
+            if proc.poll() is not None:
+                break
+            time.sleep(0.05)
+        if proc.poll() is not None:
+            self.running = False
+            self._proc = None
+            raise RuntimeError(
+                "Watcher failed to start. Restart the app with "
+                f"`python scripts/dev_desktop.py` (using {py})."
+            )
 
     def _wait(self, proc: subprocess.Popen[str]) -> None:
         code = proc.wait()
@@ -133,8 +166,11 @@ class WatcherState:
     def restart(self) -> None:
         if not self.project_dir:
             return
+        if not project.has_site_url(self.project_dir):
+            self.append_log("warn", project.SITE_URL_REQUIRED_MSG)
+            return
         mode = self.mode
-        self.append_log("cmd", f"Restarting watcher ({mode})…")
+        self.append_log("cmd", f"Restarting watcher ({mode})...")
         self.start(self.project_dir, mode)
 
 

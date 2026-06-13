@@ -5,6 +5,11 @@ export type MatchMode = "domain" | "url-prefix" | "url" | "regexp";
 /** Matches SITE_URL written to new .env.local files — update service/project.py TEMPLATE_ENV too. */
 export const DEFAULT_SITE_URL = "https://example.com/your-sandbox/";
 
+export const SITE_URL_REQUIRED_MSG =
+  "Enter your dev site URL in Setup and save before starting the watcher.";
+
+export const SITE_URL_SAVE_MSG = "Enter your dev site URL in Setup before saving.";
+
 /** True after Setup has been saved with a project path, site URL, and required files. */
 export function isSetupReady(project: ProjectInfo | null | undefined): boolean {
   if (!project) return false;

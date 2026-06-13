@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import importlib.util
+import os
 import shutil
 import socket
 import subprocess
@@ -13,6 +15,49 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PREVIEW_PORT = 5500
 SERVICE_PORT = 17890
 SETTINGS_FILE = REPO_ROOT / ".hl-preview-settings.json"
+SITE_URL_REQUIRED_MSG = "Enter your dev site URL in Setup and save before starting the watcher."
+SITE_URL_SAVE_MSG = "Enter your dev site URL in Setup before saving."
+PYTHON_DEPS_REQUIRED_MSG = "Install Python dependencies from Diagnostics before starting the watcher."
+
+PYTHON_DEPENDENCIES = (
+    ("watchdog", "watchdog"),
+    ("flask", "flask"),
+    ("flask-cors", "flask_cors"),
+)
+
+
+def sanitize_log_text(line: str) -> str:
+    """Normalize Unicode punctuation and common Windows mojibake in subprocess output."""
+    mojibake_em_dash = "\u00e2\u20ac\u201c"
+    cleaned = (
+        line.replace("\u2014", " - ")
+        .replace(mojibake_em_dash, " - ")
+        .replace("\u2026", "...")
+    )
+    lower = cleaned.lower()
+    if "site url is required" in lower or "set site_url" in lower:
+        return SITE_URL_REQUIRED_MSG
+    if "install watchdog" in lower or "pip install -r requirements" in lower:
+        return PYTHON_DEPS_REQUIRED_MSG
+    return cleaned
+
+
+def python_module_available(module: str) -> bool:
+    return importlib.util.find_spec(module) is not None
+
+
+def missing_python_deps() -> list[str]:
+    return [label for label, module in PYTHON_DEPENDENCIES if not python_module_available(module)]
+
+
+def python_deps_ok() -> bool:
+    return not missing_python_deps()
+
+
+def python_executable() -> str:
+    """Interpreter running the API — always use this for watcher subprocesses."""
+    return sys.executable
+
 
 REQUIRED_FILES = [
     "main/styles.css",
@@ -46,6 +91,8 @@ SYNCABLE_PROJECT_FILES = [
     ".gitignore",
     ".env.local.example",
 ]
+
+WATCHER_SCRIPT_FILES = [rel for rel in SYNCABLE_PROJECT_FILES if rel.startswith("scripts/")]
 
 PROJECT_GITIGNORE_TEMPLATE = REPO_ROOT / "templates" / "project.gitignore"
 
@@ -153,6 +200,14 @@ def sync_project_files(project_dir: Path, files: list[str] | None = None) -> lis
         sync_tampermonkey_loader(project_dir)
 
     return updated
+
+
+def ensure_watcher_scripts(project_dir: Path) -> list[str]:
+    """Refresh outdated watcher scripts from this app before running watch.py."""
+    outdated = [rel for rel in WATCHER_SCRIPT_FILES if rel in outdated_syncable_files(project_dir)]
+    if not outdated:
+        return []
+    return sync_project_files(project_dir, outdated)
 
 
 def _mtime_iso(path: Path) -> str | None:
@@ -327,6 +382,17 @@ def load_env(env_path: Path) -> dict[str, str]:
     return out
 
 
+def has_site_url(project_dir: Path) -> bool:
+    return bool(load_env(project_dir / ".env.local").get("SITE_URL", "").strip())
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    return env
+
+
 def write_env(env_path: Path, values: dict[str, str]) -> None:
     lines: list[str] = []
     if env_path.is_file():
@@ -451,7 +517,15 @@ def git_repo_info(path: Path) -> dict:
         ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
     ):
         try:
-            result = subprocess.run(args, capture_output=True, text=True, timeout=2, check=False)
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=2,
+                check=False,
+            )
         except (OSError, subprocess.TimeoutExpired):
             continue
         if result.returncode != 0:
@@ -555,13 +629,19 @@ def _run_watch_once(
         return False, "missing scripts/watch.py"
     if missing_files(project_dir):
         return False, "missing required project files"
+    if not has_site_url(project_dir):
+        return False, SITE_URL_REQUIRED_MSG
+    if missing := missing_python_deps():
+        return False, PYTHON_DEPS_REQUIRED_MSG
+
+    ensure_watcher_scripts(project_dir)
 
     mode = mode.lower()
     if mode not in VALID_WATCHER_MODES:
         mode = "both"
 
     args = [
-        sys.executable,
+        python_executable(),
         "-u",
         str(watch_script),
         mode,
@@ -585,6 +665,9 @@ def _run_watch_once(
         cwd=str(project_dir),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=_subprocess_env(),
         timeout=60,
         check=False,
     )
@@ -606,7 +689,13 @@ def _run_watch_once(
                 watcher.append_log("err", line.strip())
 
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout).strip()
+        detail = sanitize_log_text((result.stderr or result.stdout).strip())
+        if "site url is required" in detail.lower() or "set site_url" in detail.lower():
+            return False, SITE_URL_REQUIRED_MSG
+        if "install watchdog" in detail.lower() or "pip install -r requirements" in detail.lower():
+            return False, PYTHON_DEPS_REQUIRED_MSG
+        if "install python dependencies" in detail.lower():
+            return False, PYTHON_DEPS_REQUIRED_MSG
         return False, detail or "preview build failed"
 
     return True, ""
@@ -614,6 +703,8 @@ def _run_watch_once(
 
 def build_initial_previews(project_dir: Path) -> tuple[bool, str]:
     """Build preview/ CSS and JS once from source files."""
+    if not has_site_url(project_dir):
+        return True, ""
     return _run_watch_once(project_dir, "both", no_serve=True, log_prefix="watch.py")
 
 
@@ -712,8 +803,9 @@ def diagnostics(project_dir: Path) -> list[dict[str, str]]:
         return {"label": label, "status": "ok" if ok else "fail", "detail": detail}
 
     checks = [
-        row(".env.local", (project_dir / ".env.local").is_file()),
-        row("SITE_URL set", bool(env.get("SITE_URL"))),
+        *[row(label, python_module_available(module)) for label, module in PYTHON_DEPENDENCIES],
+        row("Project config", (project_dir / ".env.local").is_file()),
+        row("Dev site URL saved", bool(env.get("SITE_URL"))),
         row("main/styles.css", (project_dir / "main/styles.css").is_file()),
         row("main/main.js", (project_dir / "main/main.js").is_file()),
         row("Git repository", find_git_root(project_dir) is not None),

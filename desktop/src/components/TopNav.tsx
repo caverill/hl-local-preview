@@ -29,7 +29,7 @@ export default function TopNav({ projectPath, onSetupClick, onHowToClick }: Prop
       <div className="flex min-w-0 items-center gap-3">
         <AppLogo />
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="theme-text text-2xl font-semibold tracking-tight">Local Preview - see your changes live</h1>
+          <h1 className="theme-text text-xl font-semibold tracking-tight">Local Preview - see your changes live</h1>
           {projectPath ? (
             <button
               type="button"

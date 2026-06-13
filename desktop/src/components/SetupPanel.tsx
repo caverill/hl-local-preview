@@ -23,7 +23,7 @@ import {
   btnPrimaryMd,
 } from "../lib/buttons";
 import { formatRecentDir } from "../lib/logFilters";
-import { DEFAULT_SITE_URL, MATCH_MODE_OPTIONS, type MatchMode, type SetupValues } from "../lib/setup";
+import { DEFAULT_SITE_URL, MATCH_MODE_OPTIONS, SITE_URL_SAVE_MSG, type MatchMode, type SetupValues } from "../lib/setup";
 
 const setupIcon = "setup-icon shrink-0";
 
@@ -236,9 +236,6 @@ export default function SetupPanel({
       const result = await onCreateFiles(path);
       setMissingFiles(result.missing_files);
       setSiteUrl("");
-      if (result.preview_built === false && result.preview_error) {
-        setError(`Project files created, but preview build failed: ${result.preview_error}`);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create project files");
     } finally {
@@ -468,14 +465,12 @@ export default function SetupPanel({
         {missingFiles.length === 0 && outdatedFiles.length > 0 && (
           <div className="theme-callout-warn rounded-xl border p-4">
             <p className="text-base font-medium">
-              {outdatedFiles.length} toolkit file{outdatedFiles.length === 1 ? "" : "s"} behind this
-              app
+              {outdatedFiles.length} toolkit update{outdatedFiles.length === 1 ? "" : "s"} available
             </p>
             <p className="theme-text-soft mt-1 text-[11px] leading-snug">
-              Updates scripts and templates from HL Local Preview. Does not change{" "}
-              <span className="font-mono">main/styles.css</span>,{" "}
-              <span className="font-mono">main/main.js</span>, or{" "}
-              <span className="font-mono">.env.local</span>.
+              Pulls the latest watcher scripts and templates from this app. Does not change your theme
+              files (<span className="font-mono">main/styles.css</span>,{" "}
+              <span className="font-mono">main/main.js</span>) or Setup settings.
             </p>
             <ul className="theme-text-muted mt-2 space-y-1 font-mono text-[11px]">
               {outdatedFiles.map((file) => (
@@ -505,7 +500,7 @@ export default function SetupPanel({
         <fieldset>
           <legend className="section-title mb-2 flex items-center gap-1.5">
             <Link2 className={`${setupIcon} h-3.5 w-3.5`} strokeWidth={2} aria-hidden />
-            SITE_URL
+            Dev site URL
             <span className="setup-required-mark" aria-hidden>
               *
             </span>
@@ -524,7 +519,7 @@ export default function SetupPanel({
           />
           {siteUrlError ? (
             <p className="setup-field-error" role="alert">
-              SITE_URL is required — enter your dev site URL before saving.
+              {SITE_URL_SAVE_MSG}
             </p>
           ) : null}
         </fieldset>

@@ -94,7 +94,7 @@ def put_setup():
 
     site_url = str(data.get("site_url", "")).strip()
     if not site_url:
-        return jsonify({"error": "SITE_URL is required"}), 400
+        return jsonify({"error": project.SITE_URL_SAVE_MSG}), 400
 
     project.set_project_dir(p)
     d = project.get_project_dir()
@@ -195,10 +195,24 @@ def start_watcher():
     missing = project.missing_files(d)
     if missing:
         return jsonify({"error": "missing required files", "missing": missing}), 400
+    if not project.has_site_url(d):
+        return jsonify({"error": project.SITE_URL_REQUIRED_MSG}), 400
+    missing_deps = project.missing_python_deps()
+    if missing_deps:
+        return jsonify({"error": project.PYTHON_DEPS_REQUIRED_MSG, "missing_deps": missing_deps}), 400
     try:
         watcher.start(d, mode)
     except FileNotFoundError as exc:
         return jsonify({"error": str(exc)}), 400
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc), "running": False}), 500
+    except Exception as exc:
+        watcher.stop()
+        return jsonify({"error": str(exc), "running": False}), 500
+    if not watcher.running:
+        return jsonify({"error": "Watcher failed to start", "running": False}), 500
     project.update_preferences(last_watcher_mode=mode)
     return jsonify({"running": True, "mode": watcher.mode})
 
@@ -211,7 +225,23 @@ def stop_watcher():
 
 @app.post("/api/watcher/restart")
 def restart_watcher():
-    watcher.restart()
+    d = project.get_project_dir()
+    if not project.has_site_url(d):
+        return jsonify({"error": project.SITE_URL_REQUIRED_MSG}), 400
+    missing_deps = project.missing_python_deps()
+    if missing_deps:
+        return jsonify({"error": project.PYTHON_DEPS_REQUIRED_MSG, "missing_deps": missing_deps}), 400
+    try:
+        watcher.restart()
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc), "running": False}), 500
+    except Exception as exc:
+        watcher.stop()
+        return jsonify({"error": str(exc), "running": False}), 500
     return jsonify({"running": watcher.running, "mode": watcher.mode})
 
 
@@ -223,6 +253,8 @@ def rebuild_preview():
     missing = project.missing_files(d)
     if missing:
         return jsonify({"error": "missing required files", "missing": missing}), 400
+    if not project.has_site_url(d):
+        return jsonify({"error": project.SITE_URL_REQUIRED_MSG}), 400
     if watcher.running:
         return jsonify({"error": "stop the watcher before rebuilding"}), 409
     preview_ok, preview_error = project.rebuild_preview_once(d, mode)
@@ -261,13 +293,18 @@ def install_deps():
         cwd=str(d),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     for line in (result.stdout or "").splitlines() + (result.stderr or "").splitlines():
         if line.strip():
             watcher.append_log("info" if result.returncode == 0 else "err", line.strip())
     if result.returncode != 0:
         return jsonify({"error": "pip install failed"}), 500
-    return jsonify({"ok": True})
+    updated = project.ensure_watcher_scripts(d)
+    if updated:
+        watcher.append_log("info", f"Updated watcher scripts: {', '.join(updated)}")
+    return jsonify({"ok": True, "updated_scripts": updated})
 
 
 @app.get("/api/project/inspect")

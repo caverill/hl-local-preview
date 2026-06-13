@@ -16,7 +16,7 @@ type Props = {
 };
 
 export default function MainPanel({ tab, onTabChange }: Props) {
-  const { project, logs, clearLogs } = usePreviewContext();
+  const { logs, clearLogs } = usePreviewContext();
 
   return (
     <section className="glass-shell flex min-h-0 flex-1 flex-col p-4">
@@ -40,12 +40,7 @@ export default function MainPanel({ tab, onTabChange }: Props) {
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4" role="tabpanel">
         {tab === "preview" ? (
-          <PreviewTab
-            cssUrl={project?.urls.stylus}
-            jsUrl={project?.urls.js_preview}
-            logs={logs}
-            onClearLogs={clearLogs}
-          />
+          <PreviewTab logs={logs} onClearLogs={clearLogs} />
         ) : (
           <DiagnosticsTab />
         )}

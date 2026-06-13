@@ -61,7 +61,7 @@ def env_int(env: dict[str, str], key: str, *, default: int) -> int:
     try:
         value = int(raw)
     except ValueError as exc:
-        raise ValueError(f"{key} must be an integer — got {raw!r}") from exc
+        raise ValueError(f"{key} must be an integer - got {raw!r}") from exc
     if value < 500:
         raise ValueError(f"{key} must be at least 500 (milliseconds)")
     return value
@@ -86,7 +86,7 @@ def load_config(env_path: Path) -> Config:
 
     site_url = env.get("SITE_URL", "").strip()
     if not site_url:
-        raise ValueError("Site URL is required — set SITE_URL in .env.local")
+        raise ValueError("Enter your dev site URL in Setup and save before starting the watcher.")
 
     preview_name = env.get("JS_LOCAL_PREVIEW_NAME",
                            DEFAULT_PREVIEW_NAME).strip() or DEFAULT_PREVIEW_NAME
@@ -274,7 +274,7 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
         from watchdog.events import FileSystemEventHandler
         from watchdog.observers import Observer
     except ImportError:
-        print("error: install watchdog first: pip install -r requirements.txt", file=sys.stderr)
+        print("error: Install Python dependencies from the Diagnostics tab.", file=sys.stderr)
         return 1
 
     previous_source: str | None = None
