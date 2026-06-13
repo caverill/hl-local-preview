@@ -61,10 +61,7 @@ export default function ProjectSwitcher({
 
   return (
     <div ref={rootRef} className="flex min-w-0 max-w-full items-center gap-2">
-      <div className="relative min-w-0 flex-1">
-        <span className="theme-text-faint mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.12em]">
-          Project
-        </span>
+      <div className="relative flex items-center min-w-0 flex-1">
         <button
           type="button"
           className={`project-switcher-trigger w-full ${menuDisabled ? "project-switcher-trigger-disabled" : ""}`}
@@ -85,7 +82,7 @@ export default function ProjectSwitcher({
         </button>
 
         {open && !menuDisabled ? (
-          <div className="project-switcher-menu bg-white" role="listbox" aria-label="Recent projects">
+          <div className="project-switcher-menu" role="listbox" aria-label="Recent projects">
             {options.length ? (
               options.map((dir) => {
                 const active = dir === currentPath;
@@ -119,7 +116,7 @@ export default function ProjectSwitcher({
               }}
             >
               <FolderSearch className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
-              Browse for folder in Setup…
+              Browse for folder in setup…
             </button>
           </div>
         ) : null}
@@ -128,7 +125,7 @@ export default function ProjectSwitcher({
       {currentPath ? (
         <button
           type="button"
-          className={`${btnLink} mt-4 shrink-0 p-1`}
+          className={`${btnLink} mt-0.5 shrink-0 p-1`}
           onClick={onOpenFolder}
           title={`Open folder in Finder: ${currentPath}`}
           aria-label="Open project folder in Finder"

@@ -555,12 +555,14 @@
   .preview-card-editor-menu {
     @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1 shadow-lg;
     border-color: rgb(var(--glass-border));
-    background-color: #fff;
+    background-color: rgb(var(--surface-btn));
+    color: rgb(var(--text));
   }
 
   .preview-card-editor-item {
     @apply flex w-full items-center px-3 py-2.5 text-left text-sm font-medium;
     cursor: pointer;
+    color: inherit;
   }
 
   .preview-card-editor-item + .preview-card-editor-item {
@@ -568,7 +570,7 @@
   }
 
   .preview-card-editor-item:hover {
-    background-color: rgb(var(--glass-inner-bg));
+    background-color: rgb(var(--surface-btn-hover));
   }
 
   .tab-pill {
@@ -1025,14 +1027,15 @@
   .project-switcher-trigger {
     @apply flex min-w-0 items-center gap-2 rounded-xl border px-3 py-1.5;
     border-color: rgb(var(--glass-border));
-    background-color: white;
+    background-color: rgb(var(--surface-btn));
+    color: rgb(var(--text));
     cursor: pointer;
     transition: border-color 0.15s ease, background-color 0.15s ease;
   }
 
   .project-switcher-trigger:hover:not(:disabled) {
     border-color: rgb(var(--accent-subtle-border));
-    background-color: rgb(var(--glass-inner-bg));
+    background-color: rgb(var(--surface-btn-hover));
   }
 
   .project-switcher-trigger-disabled {
@@ -1042,16 +1045,19 @@
 
   .project-switcher-menu {
     @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1 shadow-lg;
-    background-color: white;
+    border-color: rgb(var(--glass-border));
+    background-color: rgb(var(--surface-btn));
+    color: rgb(var(--text));
   }
 
   .project-switcher-item {
     @apply flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left;
     cursor: pointer;
+    color: inherit;
   }
 
   .project-switcher-item:hover {
-    background-color: rgb(var(--glass-inner-bg));
+    background-color: rgb(var(--surface-btn-hover));
   }
 
   .project-switcher-item-active {
