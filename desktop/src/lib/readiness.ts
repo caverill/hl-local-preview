@@ -66,7 +66,7 @@ export function buildReadinessItems(
       id: "setup",
       label: "Setup saved",
       status: isSetupReady(project) ? "ok" : project?.path ? "fail" : "pending",
-      hint: "Project folder, SITE_URL, and match mode",
+      hint: "Project folder, dev site URL, and match mode",
     },
     {
       id: "files",

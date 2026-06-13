@@ -44,7 +44,7 @@ def parse_mode(value: str) -> str:
     key = value.strip().lower()
     if key not in MODE_ALIASES:
         raise argparse.ArgumentTypeError(
-            f"invalid mode {value!r} — use css, js, both, or 1, 2, 3"
+            f"invalid mode {value!r} - use css, js, both, or 1, 2, 3"
         )
     return MODE_ALIASES[key]
 
@@ -116,7 +116,7 @@ def watch_both(
         from watchdog.events import FileSystemEventHandler
         from watchdog.observers import Observer
     except ImportError:
-        print("error: install watchdog first: pip install -r requirements.txt", file=sys.stderr)
+        print("error: Install Python dependencies from the Diagnostics tab.", file=sys.stderr)
         return 1
 
     previous_styles: str | None = None

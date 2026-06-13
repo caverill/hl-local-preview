@@ -73,7 +73,7 @@ function LayoutShellInner() {
 
         <div className="flex min-h-0 flex-1 gap-4">
           <aside className="flex min-h-0 w-80 shrink-0 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
               <Watcher />
               <Status />
               <QuickLinks />
@@ -82,10 +82,10 @@ function LayoutShellInner() {
             <div className="shrink-0 pt-3">
               <div className="theme-divider mb-3" />
               <p className="theme-text-muted text-sm px-1 leading-tight">Made with <Heart
-                  className="h-4 w-4 inline-block align-middle mr-1 text-red-600 fill-red-600"
-                  strokeWidth={2}
-                  aria-hidden
-                /> by Cailee Averill</p>
+                className="h-4 w-4 inline-block align-middle mr-1 text-red-600 fill-red-600"
+                strokeWidth={2}
+                aria-hidden
+              /> by Cailee Averill</p>
             </div>
           </aside>
 

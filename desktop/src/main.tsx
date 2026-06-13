@@ -7,10 +7,11 @@ import "@fontsource/jetbrains-mono/500.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { applyTheme, getInitialTheme } from "./hooks/ThemeContext";
+import { applyFontSize, applyTheme, getInitialFontSize, getInitialTheme } from "./hooks/ThemeContext";
 import "./index.css";
 
 applyTheme(getInitialTheme());
+applyFontSize(getInitialFontSize());
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

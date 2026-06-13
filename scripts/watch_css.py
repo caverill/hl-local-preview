@@ -73,7 +73,7 @@ def load_config(env_path: Path) -> Config:
 
     site_url = env.get("SITE_URL", "").strip()
     if not site_url:
-        raise ValueError("Site URL is required — set SITE_URL in .env.local")
+        raise ValueError("Enter your dev site URL in Setup and save before starting the watcher.")
 
     preview_name = env.get("CMS_LOCAL_PREVIEW_NAME", DEFAULT_PREVIEW_NAME).strip() or DEFAULT_PREVIEW_NAME
     source_css = ROOT / env.get("SOURCE_CSS", DEFAULT_SOURCE_CSS).strip()
@@ -309,7 +309,7 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
         from watchdog.events import FileSystemEventHandler
         from watchdog.observers import Observer
     except ImportError:
-        print("error: install watchdog first: pip install -r requirements.txt", file=sys.stderr)
+        print("error: Install Python dependencies from the Diagnostics tab.", file=sys.stderr)
         return 1
 
     previous_styles: str | None = None

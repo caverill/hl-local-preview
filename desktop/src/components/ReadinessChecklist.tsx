@@ -72,7 +72,7 @@ function ExtensionsChecklistItem({
           rel="noopener noreferrer"
           className={`${btnToolbarSm} flex-1`}
         >
-          Install Stylus
+          Get Stylus
           <ExternalLink className="h-3 w-3 opacity-40" strokeWidth={2} aria-hidden />
         </a>
         <a
@@ -81,7 +81,7 @@ function ExtensionsChecklistItem({
           rel="noopener noreferrer"
           className={`${btnToolbarSm} flex-1`}
         >
-          Install Tampermonkey
+          Get Tampermonkey
           <ExternalLink className="h-3 w-3 opacity-40" strokeWidth={2} aria-hidden />
         </a>
       </div>
