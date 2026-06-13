@@ -59,6 +59,7 @@ export function buildReadinessItems(
   const cssActive = running && modeIncludesCss(mode);
   const jsActive = running && modeIncludesJs(mode);
   const portOpen = status?.preview_port_open ?? false;
+  const portHealthy = running && portOpen && (status?.preview_http_ok ?? false) && (status?.preview_root_matches ?? false);
   const filesOk = (project?.missing_files.length ?? 1) === 0;
 
   const items: ReadinessItem[] = [
@@ -88,7 +89,7 @@ export function buildReadinessItems(
     {
       id: "port",
       label: "Preview port live",
-      status: running && portOpen ? "ok" : running ? "fail" : "pending",
+      status: running && portHealthy ? "ok" : running ? "fail" : "pending",
       hint: status?.preview_port ? `Port ${status.preview_port}` : undefined,
     },
     {

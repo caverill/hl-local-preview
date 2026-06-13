@@ -46,7 +46,6 @@ function LayoutShellInner() {
 
       <div className="theme-shell relative flex h-[calc(100vh-3rem)] max-h-[calc(100vh-3rem)] flex-col gap-4 overflow-hidden rounded-3xl p-6 backdrop-blur-xl">
         <TopNav
-          projectPath={project?.path}
           onHowToClick={() => setHowToOpen(true)}
           onSetupClick={() => setSetupOpen(true)}
         />

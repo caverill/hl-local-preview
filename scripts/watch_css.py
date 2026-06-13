@@ -249,7 +249,11 @@ def print_sync_status(
     print(f"[{ts}] Updated {source} (+{added} / -{removed})")
 
 
-def print_ready_status(config: Config, *, serve: bool) -> None:
+def print_ready_status(config: Config, *, serve: bool, quiet: bool = False) -> None:
+    if quiet:
+        print("Ready — watching css")
+        return
+
     match_mode = ", ".join(match_mode_labels(config))
     source = config.source_css.relative_to(ROOT)
     output = config.output_path.relative_to(ROOT)
@@ -304,7 +308,7 @@ def open_stylus_install_tab(config: Config) -> None:
     webbrowser.open(preview_install_url(config))
 
 
-def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) -> int:
+def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool, quiet: bool = False) -> int:
     try:
         from watchdog.events import FileSystemEventHandler
         from watchdog.observers import Observer
@@ -367,7 +371,7 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
             print(f"error: {exc}", file=sys.stderr)
             return 1
 
-    print_ready_status(config, serve=serve)
+    print_ready_status(config, serve=serve, quiet=quiet)
     if serve and open_browser:
         open_stylus_install_tab(config)
 
@@ -377,8 +381,9 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
     observer.schedule(handler, str(env_path.parent), recursive=False)
     observer.start()
 
-    print("Press Ctrl+C to stop.")
-    print()
+    if not quiet:
+        print("Press Ctrl+C to stop.")
+        print()
     try:
         while True:
             time.sleep(1)

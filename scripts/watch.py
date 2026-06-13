@@ -55,7 +55,18 @@ def print_ready_status(
     js_config: watch_js.Config | None,
     *,
     serve: bool,
+    quiet: bool = False,
 ) -> None:
+    if quiet:
+        labels: list[str] = []
+        if css_config is not None:
+            labels.append("css")
+        if js_config is not None:
+            labels.append("js")
+        target = "+".join(labels) if labels else mode
+        print(f"Ready — watching {target}")
+        return
+
     print()
     print("HL Local Preview Ready")
     print()
@@ -111,6 +122,7 @@ def watch_both(
     *,
     serve: bool,
     open_browser: bool,
+    quiet: bool = False,
 ) -> int:
     try:
         from watchdog.events import FileSystemEventHandler
@@ -187,11 +199,12 @@ def watch_both(
             print(f"error: {exc}", file=sys.stderr)
             return 1
 
-    print_ready_status("both", css_config, js_config, serve=serve)
+    print_ready_status("both", css_config, js_config, serve=serve, quiet=quiet)
     if serve and open_browser:
         open_browser_tabs("both", css_config, js_config)
 
-    print("Watching for changes...")
+    if not quiet:
+        print("Watching for changes...")
     observer = Observer()
     handler = Handler()
     observer.schedule(handler, str(css_config.source_css.parent), recursive=False)
@@ -199,8 +212,9 @@ def watch_both(
     observer.schedule(handler, str(env_path.parent), recursive=False)
     observer.start()
 
-    print("Press Ctrl+C to stop.")
-    print()
+    if not quiet:
+        print("Press Ctrl+C to stop.")
+        print()
     try:
         while True:
             time.sleep(1)
@@ -222,12 +236,13 @@ def run_once(
     *,
     serve: bool,
     open_browser: bool,
+    quiet: bool = False,
 ) -> int:
     ok = True
     if css_config is not None:
-        ok = watch_css.sync_preview(css_config, None) is not None and ok
+        ok = watch_css.sync_preview(css_config, None, log_change=quiet) is not None and ok
     if js_config is not None:
-        ok = watch_js.sync_preview(js_config, None) is not None and ok
+        ok = watch_js.sync_preview(js_config, None, log_change=quiet) is not None and ok
     if not ok:
         return 1
 
@@ -239,12 +254,14 @@ def run_once(
             print(f"error: {exc}", file=sys.stderr)
             return 1
 
-    print_ready_status(mode, css_config, js_config, serve=serve)
+    if not quiet:
+        print_ready_status(mode, css_config, js_config, serve=serve)
     if serve and open_browser:
         open_browser_tabs(mode, css_config, js_config)
     if serve:
-        print("Press Ctrl+C to stop.")
-        print()
+        if not quiet:
+            print("Press Ctrl+C to stop.")
+            print()
         try:
             while True:
                 time.sleep(3600)
@@ -284,11 +301,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not open browser tabs (Stylus install URL and/or SITE_URL)",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Minimal output for the Web UI activity log (no setup banners)",
+    )
     args = parser.parse_args(argv)
 
     env_path = args.env.resolve()
     serve = not args.no_serve
     open_browser = not args.no_open
+    quiet = args.quiet
 
     css_config: watch_css.Config | None = None
     js_config: watch_js.Config | None = None
@@ -309,15 +332,16 @@ def main(argv: list[str] | None = None) -> int:
             js_config,
             serve=serve,
             open_browser=open_browser,
+            quiet=quiet,
         )
 
     if args.mode == "css" and css_config is not None:
         return watch_css.watch(
-            css_config, env_path, serve=serve, open_browser=open_browser
+            css_config, env_path, serve=serve, open_browser=open_browser, quiet=quiet
         )
     if args.mode == "js" and js_config is not None:
         return watch_js.watch(
-            js_config, env_path, serve=serve, open_browser=open_browser
+            js_config, env_path, serve=serve, open_browser=open_browser, quiet=quiet
         )
     if args.mode == "both" and css_config is not None and js_config is not None:
         return watch_both(
@@ -326,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
             env_path,
             serve=serve,
             open_browser=open_browser,
+            quiet=quiet,
         )
 
     return 1

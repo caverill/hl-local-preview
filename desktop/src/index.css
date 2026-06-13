@@ -538,6 +538,39 @@
     background-color: rgb(var(--yellow-subtle-bg));
   }
 
+  .preview-card-button {
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .preview-card-button:hover:not(:disabled) {
+    transform: translateY(-3px);
+  }
+
+  .preview-card-button-disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .preview-card-editor-menu {
+    @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1 shadow-lg;
+    border-color: rgb(var(--glass-border));
+    background-color: #fff;
+  }
+
+  .preview-card-editor-item {
+    @apply flex w-full items-center px-3 py-2.5 text-left text-sm font-medium;
+    cursor: pointer;
+  }
+
+  .preview-card-editor-item + .preview-card-editor-item {
+    border-top: 1px solid rgb(var(--glass-border));
+  }
+
+  .preview-card-editor-item:hover {
+    background-color: rgb(var(--glass-inner-bg));
+  }
+
   .tab-pill {
     cursor: pointer;
     transition:
@@ -959,13 +992,75 @@
     gap: 1rem;
   }
 
+  .diagnostics-checks-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
   @media (min-width: 1024px) {
-    .diagnostics-panels {
-      display: grid;
+    .diagnostics-checks-row {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      align-items: start;
-      gap: 1rem;
     }
+  }
+
+  .project-switcher-select {
+    @apply theme-text-muted rounded-xl border bg-transparent py-1.5 pl-3 font-mono text-sm;
+    border-color: rgb(var(--glass-border));
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .project-switcher-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .project-switcher-select:focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+  }
+
+  .project-switcher-trigger {
+    @apply flex min-w-0 items-center gap-2 rounded-xl border px-3 py-1.5;
+    border-color: rgb(var(--glass-border));
+    background-color: white;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .project-switcher-trigger:hover:not(:disabled) {
+    border-color: rgb(var(--accent-subtle-border));
+    background-color: rgb(var(--glass-inner-bg));
+  }
+
+  .project-switcher-trigger-disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .project-switcher-menu {
+    @apply absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border py-1 shadow-lg;
+    background-color: white;
+  }
+
+  .project-switcher-item {
+    @apply flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left;
+    cursor: pointer;
+  }
+
+  .project-switcher-item:hover {
+    background-color: rgb(var(--glass-inner-bg));
+  }
+
+  .project-switcher-item-active {
+    background-color: rgb(var(--accent-subtle-bg));
+  }
+
+  .project-switcher-item-action {
+    @apply flex-row items-center gap-2 border-t px-3 py-2.5 text-sm font-medium;
+    border-color: rgb(var(--glass-border));
   }
 }
 

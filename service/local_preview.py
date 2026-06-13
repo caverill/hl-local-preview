@@ -1,8 +1,9 @@
-"""Start the local preview HTTP server for the active project directory."""
+"""Preview server helpers for the active project directory."""
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -21,11 +22,38 @@ def _ensure_scripts_importable() -> None:
         sys.path.insert(0, scripts)
 
 
-def _kill_port_listeners(port: int) -> None:
+def _kill_port_listeners(port: int, *, exclude_pids: set[int] | None = None) -> None:
     _ensure_scripts_importable()
     from preview_server import kill_port_listeners
 
-    kill_port_listeners(port)
+    kill_port_listeners(port, exclude_pids=exclude_pids)
+
+
+def kill_preview_port_listeners(port: int = PREVIEW_PORT) -> None:
+    _kill_port_listeners(port, exclude_pids={os.getpid()})
+
+
+def stop_preview_server_if_running() -> bool:
+    """Shut down an in-process preview server without killing this process."""
+    _ensure_scripts_importable()
+    from preview_server import preview_server_running, stop_preview_server
+
+    if not preview_server_running():
+        return False
+    stop_preview_server()
+    return True
+
+
+def release_preview_port(port: int = PREVIEW_PORT) -> None:
+    """Free the preview port: graceful in-process shutdown, then external listeners only."""
+    _ensure_scripts_importable()
+    from preview_server import port_is_open
+
+    stop_preview_server_if_running()
+    time.sleep(0.2)
+    if port_is_open(port):
+        _kill_port_listeners(port, exclude_pids={os.getpid()})
+        time.sleep(0.2)
 
 
 def _remote_preview_root(port: int = PREVIEW_PORT) -> str | None:
@@ -39,16 +67,12 @@ def _remote_preview_root(port: int = PREVIEW_PORT) -> str | None:
 
 
 def ensure_preview_server(project_dir: Path) -> None:
-    """Serve preview assets from project_dir, replacing a stale server if needed."""
+    """Remember which project directory the watcher should serve on port 5500.
+
+    The preview HTTP server only runs inside the watcher subprocess — not the API —
+    so freeing or replacing port 5500 never kills the web UI.
+    """
     _ensure_scripts_importable()
-    from preview_server import set_serve_root, start_preview_server
+    from preview_server import set_serve_root
 
-    resolved = project_dir.resolve()
-    set_serve_root(resolved)
-
-    remote_root = _remote_preview_root()
-    if remote_root != str(resolved):
-        _kill_port_listeners(PREVIEW_PORT)
-        time.sleep(0.2)
-
-    start_preview_server()
+    set_serve_root(project_dir.resolve())

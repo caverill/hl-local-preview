@@ -10,7 +10,7 @@ export const DEFAULT_LOG_FILTERS: LogFilters = {
   errors: true,
   commands: true,
   updates: true,
-  info: true,
+  info: false,
 };
 
 export function readLogFilters(): LogFilters {

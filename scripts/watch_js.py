@@ -209,7 +209,11 @@ def print_sync_status(
     print(f"[{ts}] Preview rebuilt from {rel_source} (+{added} / -{removed})")
 
 
-def print_ready_status(config: Config, *, serve: bool) -> None:
+def print_ready_status(config: Config, *, serve: bool, quiet: bool = False) -> None:
+    if quiet:
+        print("Ready — watching js")
+        return
+
     source = config.source_js.relative_to(ROOT)
     output = config.output_path.relative_to(ROOT)
 
@@ -269,7 +273,7 @@ def open_dev_site_tab(config: Config) -> None:
     webbrowser.open(config.site_url)
 
 
-def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) -> int:
+def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool, quiet: bool = False) -> int:
     try:
         from watchdog.events import FileSystemEventHandler
         from watchdog.observers import Observer
@@ -343,19 +347,21 @@ def watch(config: Config, env_path: Path, *, serve: bool, open_browser: bool) ->
             print(f"error: {exc}", file=sys.stderr)
             return 1
 
-    print_ready_status(config, serve=serve)
+    print_ready_status(config, serve=serve, quiet=quiet)
     if serve and open_browser:
         open_dev_site_tab(config)
 
-    print("Watching for changes...")
+    if not quiet:
+        print("Watching for changes...")
     observer = Observer()
     handler = Handler()
     observer.schedule(handler, str(config.source_js.parent), recursive=False)
     observer.schedule(handler, str(env_path.parent), recursive=False)
     observer.start()
 
-    print("Press Ctrl+C to stop.")
-    print()
+    if not quiet:
+        print("Press Ctrl+C to stop.")
+        print()
     try:
         while True:
             time.sleep(1)

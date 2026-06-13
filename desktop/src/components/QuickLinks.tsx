@@ -1,5 +1,4 @@
 import {
-  Code2,
   ExternalLink,
   GitBranch,
   Globe,
@@ -8,7 +7,6 @@ import {
   Puzzle,
   type LucideIcon,
 } from "lucide-react";
-import { type EditorInfo } from "../lib/api";
 import { btnDisabled, btnNeutralBlockLeft } from "../lib/buttons";
 import { usePreviewContext } from "../hooks/PreviewContext";
 import SidebarCard from "./SidebarCard";
@@ -47,23 +45,12 @@ function modeIncludesJs(mode: string | null | undefined) {
 }
 
 export default function QuickLinks() {
-  const { project, status, editors, online, running, openUrl, openInEditor, setError } =
-    usePreviewContext();
+  const { project, status, online, running, openUrl } = usePreviewContext();
   const urls = project?.urls;
   const previewLive = status?.preview_port_open ?? false;
   const watcherMode = status?.watcher_mode;
   const cssModeActive = running && modeIncludesCss(watcherMode);
   const jsModeActive = running && modeIncludesJs(watcherMode);
-  const availableEditors = editors.filter((e) => e.available);
-
-  async function handleOpenInEditor(editor: EditorInfo["id"]) {
-    if (!project?.path) return;
-    try {
-      await openInEditor(editor, project.path);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not open in editor");
-    }
-  }
 
   return (
     <SidebarCard title="Quick Links" icon={Link2}>
@@ -89,17 +76,6 @@ export default function QuickLinks() {
         inactive={!project?.remote_web_url}
         onOpen={openUrl}
       />
-
-      {project?.path && availableEditors.length > 0 ? (
-        <button
-          type="button"
-          className={btnNeutralBlockLeft}
-          onClick={() => handleOpenInEditor(availableEditors[0]!.id)}
-        >
-          <Code2 className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
-          <span className="min-w-0 flex-1 truncate">Open in {availableEditors[0]!.label}</span>
-        </button>
-      ) : null}
     </SidebarCard>
   );
 }

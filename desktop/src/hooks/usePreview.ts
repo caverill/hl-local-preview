@@ -196,7 +196,8 @@ export function usePreview(pollMs = 1200) {
   const switchProject = useCallback(
     async (path: string) => {
       setError("");
-      await api.setProject(path);
+      const result = await api.setProject(path);
+      setProject(result);
       await refresh();
     },
     [refresh],
@@ -215,6 +216,13 @@ export function usePreview(pollMs = 1200) {
     },
     [refresh],
   );
+
+  const killPreviewPort = useCallback(async () => {
+    setError("");
+    const result = await api.killPreviewPort();
+    await refresh();
+    return result;
+  }, [refresh]);
 
   const createProjectFiles = useCallback(
     async (path: string) => {
@@ -318,6 +326,7 @@ export function usePreview(pollMs = 1200) {
     rebuildPreview,
     savePreferences,
     switchProject,
+    killPreviewPort,
     restarting,
     saveProject,
     createProjectFiles,

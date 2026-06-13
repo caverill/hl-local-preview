@@ -7,6 +7,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import urlopen
@@ -14,6 +15,7 @@ from urllib.request import urlopen
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PREVIEW_PORT = 5500
 SERVICE_PORT = 17890
+PREVIEW_ROOT_MARKER_PATH = "/.hl-preview-root"
 SETTINGS_FILE = REPO_ROOT / ".hl-preview-settings.json"
 SITE_URL_REQUIRED_MSG = "Enter your dev site URL in Setup and save before starting the watcher."
 SITE_URL_SAVE_MSG = "Enter your dev site URL in Setup before saving."
@@ -647,6 +649,7 @@ def _run_watch_once(
         mode,
         "--once",
         "--no-open",
+        "--quiet",
         "--env",
         str(env_path),
     ]
@@ -656,7 +659,7 @@ def _run_watch_once(
     try:
         from service.watcher import state as watcher
 
-        watcher.append_log("cmd", f"{log_prefix} {mode} --once")
+        watcher.append_log("cmd", f"{log_prefix} {mode} --once --quiet")
     except ImportError:
         watcher = None  # type: ignore[assignment]
 
@@ -753,6 +756,106 @@ def port_open(port: int) -> bool:
     return False
 
 
+def port_listener_summary(port: int) -> str | None:
+    """Short description of the process listening on port, if any."""
+    if sys.platform == "win32":
+        result = subprocess.run(
+            ["netstat", "-ano", "-p", "tcp"],
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        for line in result.stdout.splitlines():
+            if "LISTENING" not in line.upper():
+                continue
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            local_addr, pid = parts[1], parts[-1]
+            if local_addr.rsplit(":", 1)[-1] != str(port) or not pid.isdigit():
+                continue
+            return f"PID {pid}"
+        return None
+
+    result = subprocess.run(
+        ["lsof", "-iTCP:{0}".format(port), "-sTCP:LISTEN", "-FnPc"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    name = None
+    pid = None
+    for line in result.stdout.splitlines():
+        if line.startswith("p"):
+            pid = line[1:]
+        elif line.startswith("c"):
+            name = line[1:]
+    if name and pid:
+        return f"{name} (PID {pid})"
+    if pid:
+        return f"PID {pid}"
+    return None
+
+
+def _fetch_preview_serve_root() -> str | None:
+    try:
+        with urlopen(
+            f"http://127.0.0.1:{PREVIEW_PORT}{PREVIEW_ROOT_MARKER_PATH}",
+            timeout=1.0,
+        ) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    root = payload.get("root")
+    return str(root) if root else None
+
+
+def preview_connection_status(project_dir: Path) -> dict:
+    """HTTP health and serve-root match for the preview port."""
+    tcp_open = port_open(PREVIEW_PORT)
+    http_ok = False
+    root_matches = False
+    serve_root: str | None = None
+
+    if tcp_open:
+        serve_root = _fetch_preview_serve_root()
+        http_ok = serve_root is not None
+        if http_ok:
+            root_matches = serve_root == str(project_dir.resolve())
+
+    stale_listener = tcp_open and not http_ok
+    wrong_root = http_ok and serve_root is not None and not root_matches
+
+    return {
+        "preview_http_ok": http_ok,
+        "preview_root_matches": root_matches,
+        "preview_serve_root": serve_root,
+        "preview_stale_listener": stale_listener,
+        "preview_wrong_root": wrong_root,
+        "preview_port_listener": port_listener_summary(PREVIEW_PORT) if tcp_open else None,
+    }
+
+
+def kill_preview_port() -> dict:
+    """Stop whatever is listening on the preview port (never the API process)."""
+    was_open = port_open(PREVIEW_PORT)
+    listener = port_listener_summary(PREVIEW_PORT) if was_open else None
+    try:
+        from service.local_preview import release_preview_port
+
+        release_preview_port()
+    except OSError:
+        pass
+    still_open = port_open(PREVIEW_PORT)
+    return {
+        "was_open": was_open,
+        "port_open": still_open,
+        "listener": listener,
+        "freed": was_open and not still_open,
+    }
+
+
 def url_ok(url: str) -> bool:
     try:
         with urlopen(url, timeout=1.5) as resp:
@@ -811,6 +914,18 @@ def diagnostics(project_dir: Path) -> list[dict[str, str]]:
         row("Git repository", find_git_root(project_dir) is not None),
     ]
     if port_open(PREVIEW_PORT):
+        conn = preview_connection_status(project_dir)
+        checks.append(row("Preview HTTP server", conn["preview_http_ok"]))
+        if conn["preview_http_ok"]:
+            checks.append(row("Preview serve root", conn["preview_root_matches"], conn.get("preview_serve_root") or ""))
+        elif conn.get("preview_port_listener"):
+            checks.append(
+                row(
+                    "Port 5500 listener",
+                    False,
+                    conn["preview_port_listener"],
+                )
+            )
         checks.append(row("CSS preview URL", url_ok(urls["stylus"]), urls["stylus"]))
         checks.append(row("JS preview URL", url_ok(urls["js_preview"]), urls["js_preview"]))
     if urls["tampermonkey_loader"]:

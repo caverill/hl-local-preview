@@ -1,5 +1,7 @@
-import { Activity, Clock3, Plug, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Activity, Clock3, Plug, SlidersHorizontal, Unplug, type LucideIcon } from "lucide-react";
+import { useState } from "react";
 import { usePreviewContext } from "../hooks/PreviewContext";
+import { btnGhostSm } from "../lib/buttons";
 import { formatBuildTime } from "../lib/time";
 import SidebarCard from "./SidebarCard";
 
@@ -37,26 +39,55 @@ function StatusRow({
 }
 
 export default function Status() {
-  const { running, status, restarting } = usePreviewContext();
+  const { running, status, restarting, killPreviewPort, setError } = usePreviewContext();
+  const [freeingPort, setFreeingPort] = useState(false);
 
   const port = status?.preview_port ?? 5500;
   const portOpen = status?.preview_port_open ?? false;
-  const portHealthy = running && portOpen;
+  const httpOk = status?.preview_http_ok ?? false;
+  const rootMatches = status?.preview_root_matches ?? false;
+  const portHealthy = running && portOpen && httpOk && rootMatches;
   const mode = status?.watcher_mode;
 
   const portRestarting = restarting && !portOpen;
   const portIdle = portOpen && !running;
-  const portLabel = portHealthy ? "live" : portRestarting ? "restarting" : portIdle ? "idle" : "closed";
+  const portStale = portOpen && !httpOk;
+  const portWrongRoot = httpOk && !rootMatches;
+
+  let portLabel = "closed";
+  if (portHealthy) portLabel = "live";
+  else if (portRestarting) portLabel = "restarting";
+  else if (portIdle) portLabel = portStale ? "stale" : "idle";
+  else if (running && portOpen) portLabel = portStale ? "stale" : portWrongRoot ? "wrong root" : "starting";
+
   const portDotClass = portHealthy
     ? "status-dot-success"
     : portRestarting || portIdle
       ? "status-dot-idle"
-      : "status-dot-error";
+      : running && portOpen
+        ? "status-dot-warning"
+        : "status-dot-error";
   const portValueClass = portHealthy
     ? "status-text-success"
     : portRestarting || portIdle
       ? "status-text-idle"
-      : "status-text-error";
+      : running && portOpen
+        ? "status-text-warning"
+        : "status-text-error";
+
+  const showFreePort = !running && portOpen;
+
+  async function handleFreePort() {
+    setFreeingPort(true);
+    setError("");
+    try {
+      await killPreviewPort();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not free preview port");
+    } finally {
+      setFreeingPort(false);
+    }
+  }
 
   return (
     <SidebarCard title="Status" icon={Activity}>
@@ -73,8 +104,15 @@ export default function Status() {
         icon={Plug}
         value={`${port} ${portLabel}`}
         dotClass={portDotClass}
-        flash={portRestarting || !portHealthy}
+        flash={portRestarting || (running && !portHealthy)}
         valueClass={portValueClass}
+        title={
+          portStale && status?.preview_port_listener
+            ? `Port in use by ${status.preview_port_listener} — not the preview server`
+            : portWrongRoot && status?.preview_serve_root
+              ? `Serving ${status.preview_serve_root}`
+              : undefined
+        }
       />
       <StatusRow
         label="Last rebuild"
@@ -88,6 +126,17 @@ export default function Status() {
             : "No preview output yet. Start the watcher or use Rebuild once to generate preview/ files."
         }
       />
+      {showFreePort ? (
+        <button
+          type="button"
+          className={`${btnGhostSm} mt-1 w-full tracking-wide`}
+          disabled={freeingPort}
+          onClick={() => void handleFreePort()}
+        >
+          <Unplug className="h-3 w-3 shrink-0 inline-block" strokeWidth={2} aria-hidden />
+          {freeingPort ? "Freeing port…" : `Free port ${port}`}
+        </button>
+      ) : null}
     </SidebarCard>
   );
 }

@@ -53,6 +53,7 @@ def status():
         "project_dir": str(d),
         "missing_files": project.missing_files(d),
         **project.api_build_times(),
+        **project.preview_connection_status(d),
     })
 
 
@@ -123,8 +124,19 @@ def put_project():
     p = Path(path).expanduser().resolve()
     if not p.is_dir():
         return jsonify({"error": "not a directory"}), 400
+    if watcher.running:
+        return jsonify({"error": "stop the watcher before switching projects"}), 409
     project.set_project_dir(p)
-    return jsonify({"path": str(p)})
+    d = project.get_project_dir()
+    try:
+        from service.local_preview import ensure_preview_server
+
+        ensure_preview_server(d)
+    except OSError:
+        pass
+    info = project.project_info(d)
+    info.update(project.api_build_times())
+    return jsonify(info)
 
 
 @app.put("/api/config")
@@ -243,6 +255,13 @@ def restart_watcher():
         watcher.stop()
         return jsonify({"error": str(exc), "running": False}), 500
     return jsonify({"running": watcher.running, "mode": watcher.mode})
+
+
+@app.post("/api/preview/kill-port")
+def kill_preview_port():
+    if watcher.running:
+        return jsonify({"error": "stop the watcher before freeing the preview port"}), 409
+    return jsonify(project.kill_preview_port())
 
 
 @app.post("/api/preview/rebuild")

@@ -107,10 +107,11 @@ class WatcherState:
             str(script),
             mode,
             "--no-open",
+            "--quiet",
             "--env",
             str(env_path),
         ]
-        self.append_log("cmd", f"{py} -u scripts/watch.py {mode} --no-open")
+        self.append_log("cmd", f"{py} -u scripts/watch.py {mode} --no-open --quiet")
 
         self._proc = subprocess.Popen(
             args,

@@ -18,6 +18,12 @@ export type Status = {
   last_rebuild_at: string | null;
   css_built_at: string | null;
   js_built_at: string | null;
+  preview_http_ok: boolean;
+  preview_root_matches: boolean;
+  preview_serve_root: string | null;
+  preview_stale_listener: boolean;
+  preview_wrong_root: boolean;
+  preview_port_listener: string | null;
 };
 
 export type GitRepoInfo = {
@@ -82,7 +88,7 @@ export const api = {
   status: () => request<Status>("/api/status"),
   project: () => request<ProjectInfo>("/api/project"),
   setProject: (path: string) =>
-    request("/api/project", { method: "PUT", body: JSON.stringify({ path }) }),
+    request<ProjectInfo>("/api/project", { method: "PUT", body: JSON.stringify({ path }) }),
   saveSetup: (payload: SetupPayload) =>
     request<ProjectInfo>("/api/setup", {
       method: "PUT",
@@ -119,6 +125,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ mode }),
     }),
+  killPreviewPort: () =>
+    request<{ was_open: boolean; port_open: boolean; listener: string | null; freed: boolean }>(
+      "/api/preview/kill-port",
+      { method: "POST", body: "{}" },
+    ),
   preferences: () => request<AppPreferences>("/api/preferences"),
   savePreferences: (payload: Partial<AppPreferences>) =>
     request<AppPreferences>("/api/preferences", {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.server
 import json
+import os
 import socket
 import socketserver
 import subprocess
@@ -66,9 +67,12 @@ class ThreadedPreviewServer(socketserver.ThreadingMixIn, socketserver.TCPServer)
     daemon_threads = True
 
 
-def kill_port_listeners(port: int) -> None:
+def kill_port_listeners(port: int, *, exclude_pids: set[int] | None = None) -> None:
     """Stop processes listening on port (Unix: lsof/kill; Windows: netstat/taskkill)."""
+    skip = exclude_pids or set()
     if sys.platform == "win32":
+        current_pid = os.getpid()
+        skip = skip | {current_pid}
         result = subprocess.run(
             ["netstat", "-ano", "-p", "tcp"],
             capture_output=True,
@@ -85,6 +89,9 @@ def kill_port_listeners(port: int) -> None:
             local_addr, pid = parts[1], parts[-1]
             if local_addr.rsplit(":", 1)[-1] != str(port) or not pid.isdigit():
                 continue
+            pid_int = int(pid)
+            if pid_int in skip:
+                continue
             subprocess.run(
                 ["taskkill", "/F", "/PID", pid],
                 check=False,
@@ -99,8 +106,12 @@ def kill_port_listeners(port: int) -> None:
         check=False,
     )
     for pid in result.stdout.strip().split():
-        if pid.isdigit():
-            subprocess.run(["kill", pid], check=False)
+        if not pid.isdigit():
+            continue
+        pid_int = int(pid)
+        if pid_int in skip:
+            continue
+        subprocess.run(["kill", pid], check=False)
 
 
 def port_is_open(port: int) -> bool:
@@ -166,6 +177,10 @@ def start_preview_server() -> None:
         time.sleep(0.1)
 
     print(f"Started preview server on port {PREVIEW_PORT}")
+
+
+def preview_server_running() -> bool:
+    return _httpd is not None
 
 
 def stop_preview_server() -> None:
