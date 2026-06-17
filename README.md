@@ -45,19 +45,38 @@ Step-by-step guide with videos, available from the top bar.
 
 ## Who this is for
 
-Higher Logic CMS developers who want to develop and test custom CSS and JavaScript locally before publishing to a CMS site. This reduces the repetitive edit → upload → save → refresh cycle of working directly in the CMS editor.
+This repo is for **Higher Logic CMS developers** who want to develop and test custom CSS and JavaScript locally before publishing changes to a CMS site. The primary goal is to **reduce the repetitive edit → upload → save → refresh workflow that typically occurs when developing directly in the CMS.** Instead, you can work in your preferred editor, preview changes locally, and upload to the CMS when your work is ready.
 
 You should already have:
 
-- A sandbox or dev site URL
-- Access to the CMS theme editor for `main/styles.css` and `main/main.js`
-- Python 3.10+
-- [Stylus](https://github.com/openstyles/stylus) and [Tampermonkey](https://www.tampermonkey.net/) in your browser
-- Node.js 18+ (for the Web UI)
+- A sandbox or dev site URL (set as `SITE_URL` in `.env.local`)
+- Access to the CMS theme editor where `main/styles.css` and `main/main.js` will eventually be pasted
+- Python 3.10+, Stylus and Tampermonkey
+- Node.js 18+ (optional — only needed for the Web UI)
 
-This is **not** a deployment tool, CMS plugin, or end-user install. It runs on your machine for local development only.
+This is **not** a deployment tool, a CMS plugin, or something you install for site members. It is a personal local-dev setup on your machine.
 
----
+## Why this was created
+
+Developing **CSS and JavaScript directly in the CMS editor** can be slow and repetitive. Instead of repeatedly editing files in the CMS, saving changes, and refreshing pages to verify results, developers can work locally and see changes almost immediately. In practice, this significantly reduces the amount of time spent on repetitive upload and testing cycles, allowing more time to focus on development and debugging.
+
+- **Every change requires saving and refreshing.**
+- **Testing small updates** often involves multiple edit/save/reload cycles.
+- **Browser DevTools changes are temporary** and disappear on refresh.
+- **Browser-side CSS and JavaScript edits** can be difficult to track, reproduce, or share with teammates.
+- **Local tooling** such as Git, search, formatting, linting, and debugging workflows are not available inside the CMS editor.
+
+This project provides a **local-development workflow with near-live preview capabilities** that allows you to:
+
+- **Edit CSS and JavaScript** in your preferred editor.
+- **Preview CSS changes almost instantly** with Stylus live reload.
+- **Preview JavaScript changes on save** with Tampermonkey auto refresh (page reload).
+- **Quickly test and validate changes** before publishing them to a shared environment.
+- **Avoid repeatedly uploading JavaScript to the CMS during development**, where small changes can affect all pages that load the script.
+- **Move faster while developing and debugging CMS customizations.**
+- **Keep work-in-progress changes local** until they are ready to be published.
+
+Once development is complete, upload the final contents of `main/styles.css` and `main/main.js` to the CMS as usual.
 
 ## Quick start — Web UI
 
